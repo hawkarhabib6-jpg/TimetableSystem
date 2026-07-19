@@ -1,0 +1,104 @@
+name: Build Windows App
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ١) داگرتنی PHP Desktop (وەشانی خۆڕایی، پێشکەوتوو)
+      - name: Download PHP Desktop
+        shell: pwsh
+        run: |
+          $url = "https://github.com/cztomczak/phpdesktop/releases/download/chrome-v130.1/phpdesktop-chrome-130.1-php-8.3.zip"
+          Invoke-WebRequest -Uri $url -OutFile phpdesktop.zip
+          Expand-Archive -Path phpdesktop.zip -DestinationPath phpdesktop -Force
+
+      - name: Find extracted folder
+        shell: pwsh
+        run: |
+          $dir = Get-ChildItem phpdesktop -Directory | Select-Object -First 1
+          echo "PHPDESKTOP_DIR=phpdesktop\$($dir.Name)" >> $env:GITHUB_ENV
+
+      # ٢) کۆکردنەوەی بەرنامەکە
+      - name: Assemble app
+        shell: pwsh
+        run: |
+          $root = $env:PHPDESKTOP_DIR
+          # سڕینەوەی www ی نموونەیی و دانانی www ی ئێمە
+          Remove-Item -Recurse -Force "$root\www"
+          Copy-Item -Recurse "www" "$root\www"
+          # دانانی settings.json ی ئێمە
+          Copy-Item -Force "settings.json" "$root\settings.json"
+          # ناونانەوەی .exe ـەکە
+          Rename-Item "$root\phpdesktop-chrome.exe" "TimetableSystem.exe"
+          # دروستکردنی فۆڵدەری tmp
+          New-Item -ItemType Directory -Force -Path "$root\www\tmp" | Out-Null
+
+      # ٣) دروستکردنی پەڕگەی پۆرتەبڵ (بێ دامەزراندن)
+      - name: Create portable ZIP
+        shell: pwsh
+        run: |
+          $root = $env:PHPDESKTOP_DIR
+          Compress-Archive -Path "$root\*" -DestinationPath "TimetableSystem-Portable.zip" -Force
+
+      # ٤) دروستکردنی .exe ی دامەزرێنەر (Inno Setup)
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $root = $env:PHPDESKTOP_DIR
+          $iss = @"
+          [Setup]
+          AppName=سیستەمی خشتەی هەفتانەی قوتابخانە
+          AppVersion=1.0
+          DefaultDirName={autopf}\TimetableSystem
+          DefaultGroupName=TimetableSystem
+          OutputBaseFilename=TimetableSystem-Setup
+          OutputDir=.
+          Compression=lzma2
+          SolidCompression=yes
+          ArchitecturesInstallIn64BitMode=x64
+          [Files]
+          Source: "$root\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
+          [Icons]
+          Name: "{group}\سیستەمی خشتەی هەفتانە"; Filename: "{app}\TimetableSystem.exe"
+          Name: "{autodesktop}\سیستەمی خشتەی هەفتانە"; Filename: "{app}\TimetableSystem.exe"
+          [Run]
+          Filename: "{app}\TimetableSystem.exe"; Description: "کردنەوەی بەرنامەکە"; Flags: nowait postinstall skipifsilent
+          "@
+          $iss | Out-File -FilePath "installer.iss" -Encoding UTF8
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer.iss"
+
+      # ٥) هەڵگرتنی هەردوو فایل
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: TimetableSystem-Windows
+          path: |
+            TimetableSystem-Setup.exe
+            TimetableSystem-Portable.zip
+
+      # ٦) گەڕاندنەوەی فایلەکان بۆ ڕیپۆزیتۆری
+      - name: Commit builds to repo
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Copy-Item "TimetableSystem-Setup.exe" "release\" -Force
+          Copy-Item "TimetableSystem-Portable.zip" "release\" -Force
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add release/*
+          git commit -m "Build Windows app" 
+          git push

@@ -1,0 +1,31 @@
+{
+    "_comment": "ڕێکخستنی PHP Desktop بۆ سیستەمی خشتەی هەفتانە",
+    "application": {
+        "main_window_title": "سیستەمی خشتەی هەفتانەی قوتابخانە",
+        "icon": "",
+        "single_instance": true
+    },
+    "web_server": {
+        "listen_on": ["127.0.0.1", 0],
+        "www_directory": "www",
+        "index_files": ["index.php"]
+    },
+    "chrome": {
+        "log_file": "debug.log",
+        "cache_path": "webcache",
+        "context_menu": {
+            "enable_menu": true,
+            "navigation": false,
+            "print": true,
+            "view_source": false,
+            "reload": true,
+            "devtools": false
+        },
+        "external_navigation": false
+    },
+    "php": {
+        "cgi_directory": "php",
+        "cgi_executable": "php-cgi.exe",
+        "cgi_temp_dir": "www/tmp"
+    }
+}

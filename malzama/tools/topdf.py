@@ -14,6 +14,9 @@ EXE = os.environ.get('CHROME',
 HTML = os.path.join(ROOT, 'build', 'book.html')
 OUT = os.path.join(ROOT, 'build', 'Sunrise12-Companion.pdf')
 
+TITLE = 'Sunrise 12'
+AUTHOR = 'Falah H. Younis'
+
 LEFT = 'Ibrahim Ahmad preparatory school'
 CENTRE = 'پەیمانگای ژیر'
 RIGHT = 'Shahid Aram preparatory school'
@@ -32,14 +35,27 @@ FOOTER = f'''
   </div>
 </div>'''
 
-MARGIN = {'top': '16mm', 'bottom': '17mm', 'left': '14mm', 'right': '14mm'}
+HEADER = f'''
+<div style="width:100%;padding:0 14mm;box-sizing:border-box;
+            -webkit-print-color-adjust:exact;">
+  <div style="border-bottom:.5pt solid #D8D2C8;padding-bottom:2.2mm;
+              display:flex;align-items:baseline;justify-content:space-between;
+              font-family:'Inter',system-ui,sans-serif;">
+    <span style="font-size:7.4pt;font-weight:600;letter-spacing:.22em;
+                 text-transform:uppercase;color:#12203A;">{TITLE}</span>
+    <span style="font-size:7pt;letter-spacing:.05em;color:#7A869F;">{AUTHOR}</span>
+  </div>
+</div>'''
+
+MARGIN = {'top': '18mm', 'bottom': '17mm', 'left': '14mm', 'right': '14mm'}
 
 
-def render(page, path, footer):
+def render(page, path, running):
+    """`running` turns the page header and footer on."""
     page.pdf(path=path, format='A4', print_background=True,
-             display_header_footer=bool(footer),
-             header_template='<div></div>',
-             footer_template=footer or '<div></div>',
+             display_header_footer=running,
+             header_template=HEADER if running else '<div></div>',
+             footer_template=FOOTER if running else '<div></div>',
              margin=MARGIN, prefer_css_page_size=True)
 
 
@@ -75,8 +91,8 @@ def main():
         pg.emulate_media(media='print')
         withf = os.path.join(ROOT, 'build', '_with.pdf')
         clean = os.path.join(ROOT, 'build', '_clean.pdf')
-        render(pg, withf, FOOTER)
-        render(pg, clean, None)
+        render(pg, withf, True)
+        render(pg, clean, False)
         b.close()
 
     import pymupdf

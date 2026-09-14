@@ -60,13 +60,24 @@ Two further rules hold in both outputs:
   the first block would drop the rest of the same translation; running past it
   would absorb the next paragraph's.
 
-## Footer
+## Running head and foot
 
-Every text page carries the school line. Chromium applies a footer template to
-all pages alike, so `tools/topdf.py` prints twice and takes the full-bleed pages
-from the footer-free pass, leaving the artwork unmarked; it finds those pages by
-sampling the saturated band each one ends on. Word gets a real footer, set on
-the body sections only.
+Every text page carries the book's identity at the head and the schools at the
+foot:
+
+    SUNRISE 12                                         Falah H. Younis
+    ───────────────────────────────────────────────────────────────────
+    Ibrahim Ahmad preparatory school   پەیمانگای ژیر   Shahid Aram preparatory school
+
+Chromium applies its header and footer templates to every page alike, so
+`tools/topdf.py` prints twice and takes the full-bleed pages from the clean
+pass, leaving the artwork unmarked; it finds those pages by sampling the
+saturated band each one ends on. Word gets real header and footer parts, set on
+the body sections only - with the built-in Header and Footer styles' own tab
+stops cleared, or the right-hand text stops short of the margin.
+
+Since the page head now carries the title, the per-unit marker in the text flow
+is a chip rather than a second full-width bar.
 
 ## Output
 

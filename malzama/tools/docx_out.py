@@ -204,9 +204,29 @@ def set_margins(sec, top, bottom, left, right):
     sec.left_margin, sec.right_margin = Mm(left), Mm(right)
 
 
+HEAD_TITLE = 'Sunrise 12'
+HEAD_AUTHOR = 'Falah H. Younis'
+
 FOOT_LEFT = 'Ibrahim Ahmad preparatory school'
 FOOT_CENTRE = 'پەیمانگای ژیر'
 FOOT_RIGHT = 'Shahid Aram preparatory school'
+
+
+def clear_style_tabs(par):
+    """Drop the tab stops the Header and Footer styles bring with them.
+
+    Both built-in styles define their own centre and right tabs; left in
+    place, a tab lands on whichever comes first and the text never reaches
+    the margin.
+    """
+    pPr = par._p.get_or_add_pPr()
+    drop(pPr, 'pStyle')
+    ind = OxmlElement('w:ind')
+    ind.set(qn('w:left'), '0')
+    ind.set(qn('w:right'), '0')
+    ind.set(qn('w:firstLine'), '0')
+    drop(pPr, 'ind')
+    insert_ordered(pPr, ind)
 
 
 def tab_stops(par, positions):
@@ -234,6 +254,7 @@ def set_footer(section, on):
     if not on:
         return
     width = Mm(182).twips
+    clear_style_tabs(p)
     tab_stops(p, [(width / 2, 'center'), (width, 'right')])
     grey = RGBColor(0x7A, 0x86, 0x9F)
     run(p, FOOT_LEFT, EN_SANS, 6.6, color=grey)
@@ -293,7 +314,7 @@ def new_section(doc):
 
 
 BLEED = (0, 0, 0, 0)
-BODY = (16, 15, 14, 14)
+BODY = (18, 15, 14, 14)
 
 
 def ensure_mode(doc, mode):
@@ -310,6 +331,28 @@ def ensure_mode(doc, mode):
            else new_section(doc))
     set_margins(sec, *(BLEED if mode == 'bleed' else BODY))
     ensure_mode.cur = mode
+
+
+def set_header(section, on):
+    """Book title and author across the head of every text page."""
+    section.header.is_linked_to_previous = False
+    h = section.header
+    for extra in h.paragraphs[1:]:
+        extra._p.getparent().remove(extra._p)
+    p = h.paragraphs[0]
+    for r in list(p.runs):
+        r._element.getparent().remove(r._element)
+    p.text = ''
+    if not on:
+        return
+    clear_style_tabs(p)
+    tab_stops(p, [(Mm(182).twips, 'right')])
+    r = run(p, HEAD_TITLE.upper(), EN_SANS, 7.4, bold=True, color=INK)
+    r.font.all_caps = True
+    run(p, '\t', EN_SANS, 7)
+    run(p, HEAD_AUTHOR, EN_SANS, 7, color=RGBColor(0x7A, 0x86, 0x9F))
+    borders(p._p.get_or_add_pPr(), bottom=(4, 'D8D2C8'))
+    spacing(p, 0, 3)
 
 
 def fullpage(doc, path):
@@ -672,7 +715,7 @@ def main():
     st = doc.styles['Normal']
     st.font.name = EN
     st.font.size = Pt(10)
-    set_margins(doc.sections[0], 16, 15, 14, 14)
+    set_margins(doc.sections[0], *BODY)
     doc.sections[0].page_width = Mm(210)
     doc.sections[0].page_height = Mm(297)
 
@@ -680,7 +723,9 @@ def main():
 
     # Full-bleed sections run to the paper edge and carry no footer.
     for sec in doc.sections:
-        set_footer(sec, sec.left_margin and sec.left_margin > 0)
+        text_page = bool(sec.left_margin and sec.left_margin > 0)
+        set_header(sec, text_page)
+        set_footer(sec, text_page)
 
     print('pictures placed:', getattr(build, 'pics', 0),
           '| unreadable:', getattr(build, 'skipped', 0))

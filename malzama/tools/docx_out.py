@@ -427,6 +427,56 @@ def add_mcq(cell_or_doc, opts):
     return t
 
 
+def write_preface(doc, blocks, until):
+    """The author's letter to the student, which precedes the first unit.
+
+    Segmentation begins at the first unit marker, so this was being dropped
+    from both outputs.
+    """
+    body = [b for b in blocks[:until]
+            if b.get('text') and b.get('script') == 'ku']
+    start = next((i for i, b in enumerate(body)
+                  if b['text'].lstrip().startswith('خوێندکار')), 0)
+    body = body[start:]
+    if len(body) < 3:
+        return
+    ensure_mode(doc, 'body')
+
+    p = doc.add_paragraph()
+    rich(p, 'وتەیەک بۆ خوێندکار', 'ku', 20, bold=True, color=INK,
+         ku_font=KU_DISP)
+    rtl(p)
+    spacing(p, 2, 6)
+
+    lead = doc.add_paragraph()
+    rich(lead, body[0]['text'], 'ku', 11.4, color=INK)
+    rtl(lead)
+    spacing(lead, 0, 8, 1.6)
+
+    sub = doc.add_paragraph()
+    rich(sub, body[1]['text'], 'ku', 12.5, bold=True, color=SEA,
+         ku_font=KU_DISP)
+    rtl(sub)
+    borders(sub._p.get_or_add_pPr(), bottom=(6, HEX_RULE))
+    spacing(sub, 0, 4)
+
+    for i, b in enumerate(body[2:-1], 1):
+        _, c = onecell(doc, HEX_KU_WASH, left=(16, HEX_KU_SOFT))
+        q = cellpar(c)
+        rich(q, b['text'], 'ku', 10.6, color=KU_C)
+        run(q, f'  .{i}', EN_SANS, 8.5, bold=True, color=KU_C)
+        rtl(q)
+        spacing(q, 1, 1, 1.5)
+        doc.add_paragraph()
+
+    _, c = onecell(doc, HEX_SUN_WASH, left=(18, 'F7B267'))
+    q = cellpar(c)
+    rich(q, body[-1]['text'], 'ku', 11.2, color=INK)
+    rtl(q)
+    spacing(q, 1, 1, 1.5)
+    doc.add_paragraph()
+
+
 def build(blocks, units, doc):
     gfx = sorted(os.listdir(GFX)) if os.path.isdir(GFX) else []
     gi = 0
@@ -441,6 +491,7 @@ def build(blocks, units, doc):
     drop_trailing_empties(doc)   # the body starts with one empty paragraph
     next_gfx()   # cover
     next_gfx()   # contents
+    write_preface(doc, blocks, units[0][2])
 
     last_part, qn_ = None, 0
     for pi, n, s, e in units:

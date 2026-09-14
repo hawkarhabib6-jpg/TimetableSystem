@@ -51,6 +51,45 @@ def segment(blocks):
     return out
 
 
+def preface(blocks, until):
+    """The author's own opening words, which precede the first unit.
+
+    Segmentation starts at the first unit marker, so everything before it -
+    the letter to the student and the summary of how the booklet is built -
+    was being dropped. It is rendered here, ahead of the first part.
+    """
+    body = [b for b in blocks[:until]
+            if b.get('text') and b.get('script') == 'ku']
+    if not body:
+        return ''
+
+    # The epigraph already carries the cover; the letter starts after it.
+    start = next((i for i, b in enumerate(body)
+                  if b['text'].lstrip().startswith('خوێندکار')), 0)
+    body = body[start:]
+    if len(body) < 3:
+        return ''
+
+    opening, closing = body[0]['text'], body[-1]['text']
+    middle = body[1:-1]
+    lead = middle[0]['text'] if middle else ''
+    points = middle[1:]
+
+    items = ''.join(
+        '<li><span class="n">{}</span><span class="t">{}</span></li>'.format(
+            i + 1, render.esc_ku(b['text'])) for i, b in enumerate(points))
+
+    return (
+        '\n<section class="preface">'
+        '<div class="runhead"><span class="u">A word to the student</span></div>'
+        '<h1 class="pf-title">وتەیەک بۆ خوێندکار</h1>'
+        '<p class="pf-lead">' + render.esc_ku(opening) + '</p>'
+        '<h2 class="pf-sub">' + render.esc_ku(lead) + '</h2>'
+        '<ol class="pf-list">' + items + '</ol>'
+        '<div class="pf-close">' + render.esc_ku(closing) + '</div>'
+        '</section>')
+
+
 def part_divider(pi):
     en, ku, blurb = PART_TITLES[pi]
     return f'''
@@ -103,7 +142,7 @@ def main():
     units = segment(blocks)
     print(f'{len(units)} units across {len({u[0] for u in units})} parts')
 
-    body = [front_matter(units)]
+    body = [front_matter(units), preface(blocks, units[0][2])]
     last_part = None
     for pi, n, s, e in units:
         if pi != last_part:

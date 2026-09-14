@@ -141,6 +141,10 @@ uses. Install them before opening the .docx or Word will substitute.
 
 ## Structure
 
+The author's letter to the student opens the book, ahead of Part 1.
+Segmentation starts at the first unit marker, so everything before it was
+initially dropped - `tools/book.py` renders it as its own page now.
+
 21 units in three parts, segmented from the unit headings (which the source
 kept inside drawing shapes, not in the text flow):
 

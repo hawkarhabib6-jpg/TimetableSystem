@@ -96,9 +96,13 @@ def main():
             j += 1
         out.insert_pdf(c if is_b else a, from_page=i, to_page=j)
         i = j + 1
-    out.save(OUT, deflate=True, garbage=3)
+    # Merging by run copies each source's fonts and images once per run;
+    # garbage=4 folds the duplicates back together.
+    out.save(OUT, garbage=4, deflate=True, deflate_images=True,
+             deflate_fonts=True, clean=True)
     print(f'{out.page_count} pages -> {OUT} '
-          f'({len(bleed)} full-bleed pages left unmarked)')
+          f'({len(bleed)} full-bleed pages left unmarked, '
+          f'{os.path.getsize(OUT) / 1e6:.1f} MB)')
     for f in (withf, clean):
         os.remove(f)
 

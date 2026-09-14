@@ -418,10 +418,11 @@ def render_range(blocks, start, end, unit_word, unit_no):
 
         # text / answer, optionally paired with its Kurdish translation
         cls = 'a' if k == 'answer' else 'en'
-        if ku:
+        if ku_all:
+            kub = ''.join(f'<p class="ku">{esc_ku(x)}</p>' for x in ku_all)
             out.append(f'<div class="pair"><p class="en">{esc_en(t)}</p>'
-                       f'<p class="ku">{esc(ku)}</p></div>')
-            i += 2
+                       f'{kub}</div>')
+            i += 1 + ku_n
         else:
             tag = f'<p class="en plain">{esc_en(t)}</p>'
             red = any((r.get('color') or '') in ('C00000', 'FF0000', 'E36C0A')

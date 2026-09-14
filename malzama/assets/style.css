@@ -423,7 +423,9 @@ bdi.x-ku{
 /* List marker at the head of a Kurdish line. Isolated so its digits are
    placed by the layout rather than by bidi resolution. */
 .ku .mk{
-  direction:ltr; unicode-bidi:isolate; display:inline-block;
+  /* RTL inside the isolate: the reader meets the digit first and the dash
+     after it. An LTR isolate reverses that pair, giving "-4". */
+  direction:rtl; unicode-bidi:isolate; display:inline-block;
   font-family:var(--en-sans); font-weight:700; font-size:.88em;
   color:var(--ku); margin-inline-end:2mm;
 }

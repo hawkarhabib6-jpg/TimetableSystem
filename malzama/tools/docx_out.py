@@ -31,11 +31,27 @@ EN_SANS = 'Inter'
 KU = 'Noto Naskh Arabic'
 KU_DISP = 'Noto Kufi Arabic'
 
-INK = RGBColor(0x12, 0x20, 0x3A)
-KU_C = RGBColor(0x5F, 0x3F, 0xA8)
-ANS = RGBColor(0x0E, 0x7C, 0x66)
+# The dawn palette, matching assets/style.css. Word cannot read the
+# stylesheet, so the two have to be kept in step by hand.
+INK = RGBColor(0x1B, 0x2A, 0x41)      # --ink
+INK_FAINT = RGBColor(0x7E, 0x8D, 0xA3)  # --ink-faint
+SEA = RGBColor(0x2E, 0x6E, 0x8E)      # --sea, structure
+KU_C = RGBColor(0x57, 0x4C, 0x8C)     # --ku
+ANS = RGBColor(0x2E, 0x7D, 0x6B)      # --answer
 TBC = RGBColor(0x4A, 0x3A, 0x1C)
-SUN = RGBColor(0xD4, 0x44, 0x2A)
+SUN = RGBColor(0xC7, 0x7B, 0x3C)      # --sun-deep, no longer a red
+NOTE = RGBColor(0x8A, 0x6A, 0x2F)     # --tb
+
+HEX_INK = '1B2A41'
+HEX_SEA = '2E6E8E'
+HEX_SEA_WASH = 'EFF6F9'
+HEX_RULE = 'E4E0D8'
+HEX_KU_WASH = 'F5F3FB'
+HEX_KU_SOFT = '8E84C0'
+HEX_SUN_WASH = 'FFF6E9'
+HEX_TB_WASH = 'FBF5EA'
+HEX_TB_EDGE = 'E0C48C'
+HEX_ZEBRA = 'FAF7F2'
 
 
 # ---------------------------------------------------------------- low level
@@ -256,14 +272,14 @@ def set_footer(section, on):
     width = Mm(182).twips
     clear_style_tabs(p)
     tab_stops(p, [(width / 2, 'center'), (width, 'right')])
-    grey = RGBColor(0x7A, 0x86, 0x9F)
+    grey = INK_FAINT
     run(p, FOOT_LEFT, EN_SANS, 6.6, color=grey)
     run(p, '\t', EN_SANS, 6.6)
     r = run(p, FOOT_CENTRE, KU_DISP, 7.4, color=KU_C)
     r._element.get_or_add_rPr().append(OxmlElement('w:rtl'))
     run(p, '\t', EN_SANS, 6.6)
     run(p, FOOT_RIGHT, EN_SANS, 6.6, color=grey)
-    borders(p._p.get_or_add_pPr(), top=(4, 'D8D2C8'))
+    borders(p._p.get_or_add_pPr(), top=(4, HEX_RULE))
     spacing(p, 2, 0)
 
 
@@ -350,8 +366,8 @@ def set_header(section, on):
     r = run(p, HEAD_TITLE.upper(), EN_SANS, 7.4, bold=True, color=INK)
     r.font.all_caps = True
     run(p, '\t', EN_SANS, 7)
-    run(p, HEAD_AUTHOR, EN_SANS, 7, color=RGBColor(0x7A, 0x86, 0x9F))
-    borders(p._p.get_or_add_pPr(), bottom=(4, 'D8D2C8'))
+    run(p, HEAD_AUTHOR, EN_SANS, 7, color=INK_FAINT)
+    borders(p._p.get_or_add_pPr(), bottom=(4, HEX_RULE))
     spacing(p, 0, 3)
 
 
@@ -378,8 +394,8 @@ def add_ku(doc_or_cell, text, size=10.5, color=KU_C, indent=True):
     spacing(p, 0, 3, 1.45)
     if indent and not hasattr(doc_or_cell, '_tc'):
         p.paragraph_format.right_indent = Mm(2)
-        borders(p._p.get_or_add_pPr(), right=(18, '8A6FC7'))
-        shade(p._p.get_or_add_pPr(), 'F7F4FD')
+        borders(p._p.get_or_add_pPr(), right=(18, HEX_KU_SOFT))
+        shade(p._p.get_or_add_pPr(), HEX_KU_WASH)
     return p
 
 
@@ -504,8 +520,8 @@ def build(blocks, units, doc):
                         if is_ku:
                             rtl(p)
                         spacing(p, 1, 1)
-                        cell_shade(c, '12203A' if ri == 0
-                                   else ('FBF9F6' if ri % 2 == 0 else 'FFFFFF'))
+                        cell_shade(c, HEX_SEA if ri == 0
+                                   else (HEX_ZEBRA if ri % 2 == 0 else 'FFFFFF'))
                 doc.add_paragraph()
                 i += 1
                 continue
@@ -541,19 +557,19 @@ def build(blocks, units, doc):
                                 color=RGBColor(0xFF, 0xFF, 0xFF) if first
                                 else SUN)
                             spacing(pp, 1, 1)
-                        cell_shade(c, '12203A' if first else 'FFFFFF')
+                        cell_shade(c, HEX_SEA if first else 'FFFFFF')
                         borders(c._tc.get_or_add_tcPr(),
-                                top=(6, 'E7E2DA'), bottom=(6, 'E7E2DA'),
-                                left=(6, 'E7E2DA'), right=(6, 'E7E2DA'))
+                                top=(6, HEX_RULE), bottom=(6, HEX_RULE),
+                                left=(6, HEX_RULE), right=(6, HEX_RULE))
                 doc.add_paragraph()
                 i += 1
                 continue
 
             if k == 'tb':
                 t2 = re.sub(r'^\s*T\.?\s*B\s*\d*\s*[:/]?\s*', '', t, flags=re.I)
-                _, c = onecell(doc, 'FFF7EA', edge=(6, 'F0DFC0'))
+                _, c = onecell(doc, HEX_TB_WASH, left=(16, HEX_TB_EDGE))
                 p = cellpar(c)
-                run(p, 'T.B  ', EN_SANS, 7.5, bold=True, color=RGBColor(0xA4, 0x64, 0x0B))
+                run(p, 'T.B  ', EN_SANS, 7.5, bold=True, color=NOTE)
                 is_ku = b.get('script') == 'ku'
                 rich(p, t2, 'ku' if is_ku else 'en',
                      10 if is_ku else 9.5, color=TBC)
@@ -569,7 +585,7 @@ def build(blocks, units, doc):
 
             if k == 'example':
                 body = re.sub(r'^\s*e\.?\s*g\s*/?\s*', '', t, flags=re.I)
-                _, c = onecell(doc, 'FFF4E6', left=(18, 'FFB13D'))
+                _, c = onecell(doc, HEX_SUN_WASH, left=(18, 'F7B267'))
                 p = cellpar(c)
                 run(p, 'EXAMPLE', EN_SANS, 6.5, bold=True, color=SUN)
                 spacing(p, 1, 1)
@@ -582,13 +598,13 @@ def build(blocks, units, doc):
                 continue
 
             if re.match(r'^\s*question\s*bank\b', t, re.I) and len(t) < 30:
-                _, c = onecell(doc, '12203A')
+                _, c = onecell(doc, HEX_SEA)
                 p = cellpar(c)
                 run(p, 'Question Bank', EN_SANS, 11.5, bold=True,
                     color=RGBColor(0xFF, 0xFF, 0xFF))
                 run(p, '                                        ', EN, 11)
                 run(p, 'بانکی پرسیار', KU_DISP, 10.5, bold=True,
-                    color=RGBColor(0xFF, 0xD9, 0xA8))
+                    color=RGBColor(0xFF, 0xD7, 0x9B))
                 spacing(p, 2, 2)
                 keep_next(p)
                 doc.add_paragraph()
@@ -609,7 +625,7 @@ def build(blocks, units, doc):
                      ku_font=KU_DISP, en_font=EN_SANS)
                 if is_ku:
                     rtl(p)
-                borders(p._p.get_or_add_pPr(), bottom=(4, 'E7E2DA'))
+                borders(p._p.get_or_add_pPr(), bottom=(4, HEX_RULE))
                 spacing(p, 6, 2)
                 keep_next(p)
                 i += 1
@@ -637,11 +653,11 @@ def build(blocks, units, doc):
                             pp = doc.paragraphs[-1]._p
                             pp.getparent().remove(pp)
                 qn_ += 1
-                _, c = onecell(doc, 'FFFFFF', left=(20, '1B5FA8'),
-                               edge=(4, 'E7E2DA'))
+                _, c = onecell(doc, HEX_SEA_WASH, left=(20, HEX_SEA),
+                               edge=None)
                 p = cellpar(c)
                 run(p, f'{qn_}.  ', EN_SANS, 9.5, bold=True,
-                    color=RGBColor(0x1B, 0x5F, 0xA8))
+                    color=SEA)
                 rich(p, lead or 'Choose the correct answer', 'en', 10,
                      bold=True, color=INK, en_font=EN_SANS)
                 spacing(p, 1, 2)
@@ -655,18 +671,18 @@ def build(blocks, units, doc):
 
             if k == 'question':
                 qn_ += 1
-                _, c = onecell(doc, 'FFFFFF', left=(20, '1B5FA8'),
-                               edge=(4, 'E7E2DA'))
+                _, c = onecell(doc, HEX_SEA_WASH, left=(20, HEX_SEA),
+                               edge=None)
                 p = cellpar(c)
                 run(p, f'{qn_}.  ', EN_SANS, 9.5, bold=True,
-                    color=RGBColor(0x1B, 0x5F, 0xA8))
+                    color=SEA)
                 rich(p, t, 'en', 10, bold=True, color=INK, en_font=EN_SANS)
                 spacing(p, 1, 2)
                 if nxt and nxt['kind'] == 'answer':
                     pa = c.add_paragraph()
                     run(pa, '✓  ', EN_SANS, 9, bold=True, color=ANS)
                     rich(pa, nxt['text'], 'en', 9.5, bold=True, color=ANS)
-                    shade(pa._p.get_or_add_pPr(), 'EDF7F4')
+                    pass
                     spacing(pa, 1, 1)
                     i += 1
                     ku_all, ku_n = translation(i)
@@ -692,14 +708,14 @@ def build(blocks, units, doc):
                 p = doc.add_paragraph()
                 rich(p, t.rstrip(' -:'), 'en', 9.5, bold=True, color=SUN,
                      en_font=EN_SANS)
-                borders(p._p.get_or_add_pPr(), bottom=(4, 'E7E2DA'))
+                borders(p._p.get_or_add_pPr(), bottom=(4, HEX_RULE))
                 spacing(p, 5, 2)
                 keep_next(p)
             elif k == 'answer' and red and len(t) > 25:
                 p = doc.add_paragraph()
                 run(p, '✓  ', EN_SANS, 9, bold=True, color=ANS)
                 rich(p, t, 'en', 9.5, bold=True, color=ANS)
-                shade(p._p.get_or_add_pPr(), 'EDF7F4')
+                pass
                 spacing(p, 2, 2)
             elif ku_all:
                 add_en(doc, t)

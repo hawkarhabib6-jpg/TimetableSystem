@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Turn the classified blocks into the designed HTML book."""
-import json, re, os, html, sys
+import json, re, os, html, sys, math
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -26,6 +26,13 @@ FORMULA_HINT = re.compile(
 
 
 LATIN_RUN = re.compile(r'[A-Za-z][A-Za-z0-9 ,.\'’/&:_-]*[A-Za-z0-9.]|[A-Za-z]')
+
+
+RAYS = ''.join(
+    f'<line x1="50" y1="100" x2="{50 + 78 * math.cos(math.radians(a)):.2f}"'
+    f' y2="{100 - 78 * math.sin(math.radians(a)):.2f}"'
+    f' stroke="#fff" stroke-width="{0.22 if i % 2 else 0.42}"/>'
+    for i, a in enumerate(range(6, 175, 7)))
 
 
 def esc(s):
@@ -121,6 +128,7 @@ def group(blocks, start, end):
         if b['kind'] in ('answer', 'subheading', 'text') and FORMULA_HINT.search(t):
             alts, j = [], i - 1
             while j >= start and blocks[j]['kind'] in ('answer', 'subheading', 'text') \
+                    and not blocks[j].get('images') \
                     and SHORT_ALT.match(blocks[j].get('text', '')):
                 alts.insert(0, blocks[j]['text'])
                 if out and out[-1] is blocks[j]:
@@ -128,6 +136,7 @@ def group(blocks, start, end):
                 j -= 1
             k2 = i + 1
             while k2 < end and blocks[k2]['kind'] in ('answer', 'subheading', 'text') \
+                    and not blocks[k2].get('images') \
                     and SHORT_ALT.match(blocks[k2].get('text', '')):
                 alts.append(blocks[k2]['text'])
                 k2 += 1
@@ -144,7 +153,8 @@ def group(blocks, start, end):
                 if k2 < end:
                     m2 = re.match(r'^\s*([a-dA-D])\s*[.)]\s+(.{2,90})$',
                                   blocks[k2].get('text', ''))
-                    if m2 and m2.group(1).lower() == w:
+                    if m2 and m2.group(1).lower() == w \
+                            and not blocks[k2].get('images'):
                         opts.append(m2.group(2).strip().rstrip(')'))
                         k2 += 1
                         continue
@@ -165,7 +175,8 @@ def group(blocks, start, end):
                 if k2 < end:
                     m2 = re.match(r'^\s*([a-dA-D])\s*[.)]\s+(.{2,90})$',
                                   blocks[k2].get('text', ''))
-                    if m2 and m2.group(1).lower() == w:
+                    if m2 and m2.group(1).lower() == w \
+                            and not blocks[k2].get('images'):
                         opts.append(m2.group(2).strip())
                         k2 += 1
                         continue
@@ -173,7 +184,8 @@ def group(blocks, start, end):
             if len(opts) >= 3:
                 stem = ''
                 if out and out[-1].get('kind') in ('text', 'question') \
-                        and out[-1].get('script') == 'en':
+                        and out[-1].get('script') == 'en' \
+                        and not out[-1].get('images'):
                     stem = out.pop()['text']
                 out.append({'kind': 'looseq', 'text': stem, 'opts': opts,
                             'script': 'en'})
@@ -185,6 +197,7 @@ def group(blocks, start, end):
             opts, k2 = [], i + 1
             while k2 < end and len(opts) < 4 and blocks[k2]['kind'] in ('text', 'answer') \
                     and blocks[k2].get('script') == 'en' \
+                    and not blocks[k2].get('images') \
                     and 3 < len(blocks[k2].get('text', '')) < 90:
                 opts.append(blocks[k2]['text'])
                 k2 += 1
@@ -225,11 +238,7 @@ def render_range(blocks, start, end, unit_word, unit_no):
     out = []
 
     # --- Opener -------------------------------------------------
-    rays = ''.join(
-        f'<line x1="50" y1="100" x2="{50 + 78 * __import__("math").cos(__import__("math").radians(a))}"'
-        f' y2="{100 - 78 * __import__("math").sin(__import__("math").radians(a))}"'
-        f' stroke="#fff" stroke-width="{0.22 if i % 2 else 0.42}"/>'
-        for i, a in enumerate(range(6, 175, 7)))
+    rays = RAYS
     topics = [b['text'] for b in blocks[start:end]
               if b['kind'] in ('heading', 'subheading') and 3 < len(b['text']) < 42][:9]
     toc = ''.join(f'<span>{esc(t)}</span>' for t in topics)

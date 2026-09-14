@@ -64,6 +64,28 @@ def para_runs(p):
     return out
 
 
+W = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+
+
+def textbox_text(p):
+    """Text of any shape anchored in this paragraph.
+
+    Word stores each shape twice — once as DrawingML, once as a VML fallback —
+    so identical consecutive chunks are collapsed.
+    """
+    chunks = []
+    for tx in p._element.iter(W + 'txbxContent'):
+        parts = []
+        for para in tx.iter(W + 'p'):
+            t = ''.join(x.text or '' for x in para.iter(W + 't')).strip()
+            if t:
+                parts.append(t)
+        t = convert(' '.join(parts)).strip()
+        if t and (not chunks or chunks[-1] != t):
+            chunks.append(t)
+    return chunks
+
+
 def images_in(p, rel_map):
     found = []
     for blip in p._element.findall('.//' + qn('a:blip')):
@@ -132,6 +154,14 @@ def main():
             runs = para_runs(p)
             text = convert(p.text).strip()
             imgs = images_in(p, rel_map)
+
+            # Shapes carry the unit headings and most section titles.
+            for box in textbox_text(p):
+                kind = 'unit' if UNIT_RE.match(box) and len(box) < 40 else 'boxed'
+                blocks.append({'kind': kind, 'text': box, 'runs': [],
+                               'script': script_of(box), 'style': 'Shape',
+                               'align': None, 'images': []})
+
             if not text and not imgs:
                 continue
             blocks.append({

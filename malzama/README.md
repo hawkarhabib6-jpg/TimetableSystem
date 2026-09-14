@@ -36,8 +36,34 @@ The grammar patterns are the one place the layout improves on the source: the
 original scattered each alternative across separate one-line paragraphs, which
 `tools/render.py` regroups into a single diagram.
 
+## Output
+
+Both deliverables come from the same source and the same stylesheet:
+
+| File | What it is |
+|---|---|
+| `build/Sunrise12-Companion.pdf` | 393 pages, A4, print-ready |
+| `build/Sunrise12-Companion.docx` | the same book as editable Word content |
+
+The Word file carries real paragraphs, tables and pictures rather than a
+picture of each page, so it stays editable. Only the full-page artwork (cover,
+part dividers, unit openers) is placed as an image, rendered from the same HTML
+the PDF uses so the two stay identical.
+
+`fonts/*.ttf` are the Noto Naskh Arabic and Noto Kufi Arabic faces the design
+uses. Install them before opening the .docx or Word will substitute.
+
 ## Build
 
-    cd tools && python3 extract.py && python3 render.py 8 165 one
-    chromium --headless --no-pdf-header-footer \
-      --print-to-pdf=build/unit-one.pdf build/unit-one.html
+    tools/build.sh
+
+## Structure
+
+21 units in three parts, segmented from the unit headings (which the source
+kept inside drawing shapes, not in the text flow):
+
+| Part | Units |
+|---|---|
+| 1 · Grammar | 1-7 |
+| 2 · Reading & Apsod | 1-3, 5-8 |
+| 3 · Activities | 1-3, 5-8 |

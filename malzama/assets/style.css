@@ -43,7 +43,9 @@
   size: A4;
   margin: 16mm 14mm 15mm 14mm;
 }
-@page:first{ margin:0; }
+/* Full-bleed pages get their own page box, so the artwork can reach the
+   paper edge instead of being inset by the text margins. */
+@page bleed{ size:A4; margin:0; }
 
 *{ box-sizing:border-box; }
 html{ -webkit-print-color-adjust:exact; print-color-adjust:exact; background:var(--paper); }
@@ -58,7 +60,7 @@ body{
 /* ---------- Unit opener ---------- */
 .opener{
   position:relative; break-after:page; break-inside:avoid;
-  width:210mm; height:297mm; margin:-16mm 0 0 -14mm; padding:46mm 20mm 0;
+  page:bleed; width:210mm; height:297mm; margin:0; padding:46mm 20mm 0;
   overflow:hidden; color:#fff;
   background:
     radial-gradient(120% 78% at 50% 116%, var(--sun-1) 0%, var(--sun-2) 42%, #7A2E62 78%, #241436 100%);
@@ -79,7 +81,7 @@ body{
 }
 .opener .title-ku{
   font-family:var(--ku-disp); font-weight:700; font-size:19pt;
-  direction:rtl; opacity:.93; max-width:150mm;
+  direction:rtl; text-align:left; opacity:.93; max-width:150mm;
 }
 .opener .rule{ width:34mm; height:2.2pt; background:rgba(255,255,255,.85); margin:7mm 0; }
 .opener .toc{
@@ -295,3 +297,91 @@ bdi{ unicode-bidi:isolate; font-family:var(--en-serif); }
   background:var(--sun-2);
 }
 .prompt::after{ content:''; flex:1; height:.6pt; background:var(--rule); }
+
+/* ============================================================
+   Front matter & part dividers
+   ============================================================ */
+.cover{
+  page:bleed; position:relative; width:210mm; height:297mm; margin:0;
+  padding:52mm 22mm 0; overflow:hidden; color:#fff; break-after:page;
+  background:radial-gradient(120% 80% at 50% 118%,
+    #FFC259 0%, var(--sun-1) 26%, var(--sun-2) 50%, #8E2F66 80%, #1B1030 100%);
+}
+.cover .rays{ position:absolute; inset:0; opacity:.26; }
+.cover .ckicker{
+  font-family:var(--en-sans); font-weight:600; font-size:10pt;
+  letter-spacing:.36em; text-transform:uppercase; opacity:.88;
+}
+.cover h1{
+  font-family:var(--en-sans); font-weight:800; font-size:60pt;
+  letter-spacing:-.035em; line-height:.94; margin:10mm 0 0;
+  display:flex; align-items:baseline; gap:5mm;
+}
+.cover h1 span{
+  font-size:40pt; color:transparent; -webkit-text-stroke:1.4pt rgba(255,255,255,.8);
+}
+.cover .csub{
+  font-family:var(--en-sans); font-weight:500; font-size:15pt;
+  opacity:.93; margin-top:3mm; letter-spacing:-.01em;
+}
+.cover .cku{
+  font-family:var(--ku-disp); font-weight:700; font-size:15pt;
+  direction:rtl; text-align:left; margin-top:9mm; line-height:1.7; max-width:150mm;
+}
+.cover .cfoot{
+  position:absolute; left:22mm; right:22mm; bottom:24mm;
+  border-top:.6pt solid rgba(255,255,255,.4); padding-top:5mm;
+  font-family:var(--en-sans); font-size:9pt; letter-spacing:.12em;
+  text-transform:uppercase; opacity:.85;
+}
+
+.toc-page{ break-after:page; }
+.tocpart{ margin:0 0 8mm; break-inside:avoid; }
+.tocpart h3{
+  font-family:var(--en-sans); font-weight:700; font-size:11pt;
+  color:var(--sun-deep); margin:0 0 2.5mm; padding-bottom:1.4mm;
+  border-bottom:.8pt solid var(--rule);
+  display:flex; justify-content:space-between; align-items:baseline;
+}
+.tocpart h3 .ku{
+  font-family:var(--ku-disp); font-size:10pt; color:var(--ku);
+  background:none; border:0; padding:0; direction:rtl;
+}
+.tocpart ul{ list-style:none; margin:0; padding:0; }
+.tocpart li{
+  display:flex; align-items:center; gap:3mm;
+  padding:1.5mm 0; border-bottom:.5pt dotted var(--rule);
+  font-family:var(--en-serif); font-size:10pt;
+}
+.tocpart li .n{
+  flex:none; width:6mm; height:6mm; border-radius:1.5pt;
+  background:var(--ink); color:#fff; font-family:var(--en-sans);
+  font-weight:700; font-size:7.5pt;
+  display:inline-flex; align-items:center; justify-content:center;
+}
+
+.divider{
+  page:bleed; position:relative; width:210mm; height:297mm; margin:0;
+  padding:96mm 26mm 0; break-before:page; break-after:page; color:var(--ink);
+  background:linear-gradient(160deg,#FFF6E9 0%,#FFEEDC 46%,#FCE3D3 100%);
+}
+.divider::after{
+  content:''; position:absolute; left:0; right:0; bottom:0; height:7mm;
+  background:linear-gradient(90deg,var(--sun-1),var(--sun-2),#8E2F66);
+}
+.divider .dnum{
+  font-family:var(--en-sans); font-weight:700; font-size:9.5pt;
+  letter-spacing:.34em; text-transform:uppercase; color:var(--sun-deep);
+}
+.divider h1{
+  font-family:var(--en-sans); font-weight:800; font-size:40pt;
+  letter-spacing:-.03em; margin:6mm 0 2mm; line-height:1;
+}
+.divider .dku{
+  font-family:var(--ku-disp); font-weight:700; font-size:20pt;
+  direction:rtl; text-align:left; color:var(--ku);
+}
+.divider .dblurb{
+  font-family:var(--en-serif); font-size:11.5pt; color:var(--ink-soft);
+  margin-top:8mm; max-width:120mm; line-height:1.6;
+}

@@ -1,2 +1,2 @@
-build/*.png
-build/fonttest.*
+# Generated output — rebuild with tools/build.sh
+build/

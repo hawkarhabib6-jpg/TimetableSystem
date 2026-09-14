@@ -118,6 +118,11 @@ def front_matter(units):
   <h1>SUNRISE<span>12</span></h1>
   <div class="csub">Companion &amp; Study Guide</div>
   <div class="cku">مەلزەمەی تەواوی بابەتی ئینگلیزی — پۆلی دوازدەی ئامادەیی</div>
+  <div class="byline">
+    <div class="lbl"><span>Prepared by</span><span class="k">ئامادەکردنی</span></div>
+    <span class="ku">فلاح حسن یونس</span>
+    <span class="en">Falah H. Younis</span>
+  </div>
   <div class="quote">
     <p>Education is the passport to the future, for tomorrow belongs to
        those who prepare for today.</p>

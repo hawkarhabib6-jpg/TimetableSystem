@@ -388,11 +388,36 @@ bdi{ unicode-bidi:isolate; font-family:var(--en-serif); }
   direction:rtl; text-align:left; margin-top:8mm; line-height:1.75;
   max-width:150mm; color:var(--ku);
 }
+.cover .byline{
+  /* The author's credit, where a textbook cover carries it: directly under
+     the title block, set quietly enough not to compete with it. */
+  margin-top:11mm; padding-top:5mm; max-width:96mm;
+  border-top:.8pt solid rgba(27,42,65,.25);
+  display:flex; flex-direction:column; gap:1.6mm;
+}
+.cover .byline .lbl{
+  display:flex; gap:5mm; align-items:baseline;
+  font-family:var(--en-sans); font-size:7.6pt; font-weight:600;
+  letter-spacing:.2em; text-transform:uppercase; color:var(--sea);
+}
+.cover .byline .lbl .k{
+  font-family:var(--ku-disp); direction:rtl; unicode-bidi:isolate;
+  letter-spacing:0; text-transform:none; font-size:9pt;
+}
+.cover .byline .ku{
+  font-family:var(--ku-disp); font-weight:700; font-size:15pt;
+  direction:rtl; text-align:left; color:var(--ink);
+}
+.cover .byline .en{
+  font-family:var(--en-sans); font-weight:500; font-size:11.5pt;
+  letter-spacing:.02em; color:var(--ink-soft);
+}
+
 .cover .quote{
   /* The author's own epigraph, given the room it deserves. For a reader in
      an exam year the cover's job is not decoration but a reason to open the
      book. */
-  position:absolute; left:22mm; right:22mm; bottom:50mm;
+  position:absolute; left:22mm; right:22mm; bottom:46mm;
   max-width:146mm;
 }
 .cover .quote p{

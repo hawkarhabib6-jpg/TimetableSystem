@@ -10,6 +10,7 @@ import docx
 from docx.oxml.ns import qn
 from alik import convert
 from textfix import fill_marker_gaps
+from edits import apply as apply_edits
 
 SRC = os.path.join(os.path.dirname(__file__), '..', 'src', 'malzama.docx')
 OUT = os.path.join(os.path.dirname(__file__), '..', 'build', 'doc.json')
@@ -185,6 +186,7 @@ def main():
                            'script': script_of(' '.join(' '.join(r) for r in rows))})
 
     gaps = fill_marker_gaps(blocks)
+    edited = apply_edits(blocks)
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     json.dump(blocks, open(OUT, 'w', encoding='utf8'),
@@ -197,6 +199,7 @@ def main():
         print(f'  {k:12s} {n}')
     print('images referenced:', sum(len(b.get("images", [])) for b in blocks))
     print('list markers the author left out:', gaps)
+    print('editorial changes applied:', edited)
 
 
 if __name__ == '__main__':

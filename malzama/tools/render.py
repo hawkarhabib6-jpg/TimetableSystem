@@ -47,8 +47,15 @@ def mix(text, host):
     """
     out = []
     for sc, chunk in segments(clean(text)):
-        e = html.escape(chunk, quote=False)
-        out.append(e if sc == host else f'<bdi class="x-{sc}">{e}</bdi>')
+        if sc == host:
+            out.append(html.escape(chunk, quote=False))
+            continue
+        # Whitespace stays outside the isolate: a space trapped at an isolate
+        # boundary collapses, running the two scripts together.
+        lead = chunk[:len(chunk) - len(chunk.lstrip())]
+        tail = chunk[len(chunk.rstrip()):]
+        core = html.escape(chunk.strip(), quote=False)
+        out.append(f'{lead}<bdi class="x-{sc}">{core}</bdi>{tail}')
     return ''.join(out)
 
 
@@ -72,7 +79,7 @@ def ku_html(text):
     body = esc_ku(rest)
     if marker is None:
         return body
-    return f'<span class="mk">{esc(marker)}</span>{body}' 
+    return f'<span class="mk">{esc(marker)}-</span>{body}' 
 
 
 def is_ku(b):

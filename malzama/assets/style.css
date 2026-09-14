@@ -424,9 +424,6 @@ bdi.x-ku{
    placed by the layout rather than by bidi resolution. */
 .ku .mk{
   direction:ltr; unicode-bidi:isolate; display:inline-block;
-  font-family:var(--en-sans); font-weight:700; font-size:.82em;
-  color:#fff; background:var(--ku-soft); border-radius:20pt;
-  min-width:4.6mm; padding:.2mm 1.6mm; text-align:center;
-  margin-inline-end:2.2mm; vertical-align:.4mm;
+  font-family:var(--en-sans); font-weight:700; font-size:.88em;
+  color:var(--ku); margin-inline-end:2mm;
 }
-.tb .ku .mk{ background:var(--tb); }

@@ -54,7 +54,7 @@ def segment(blocks):
 def part_divider(pi):
     en, ku, blurb = PART_TITLES[pi]
     return f'''
-<section class="divider">
+<section class="divider"><span class="bleedmark">§bleed§</span>
   <div class="dnum">Part {pi + 1}</div>
   <h1>{en}</h1>
   <div class="dku">{esc(ku)}</div>
@@ -72,7 +72,7 @@ def front_matter(units):
         rows += (f'<div class="tocpart"><h3>Part {pi + 1} · {en}'
                  f'<span class="ku">{esc(ku)}</span></h3><ul>{items}</ul></div>')
     return f'''
-<section class="cover">
+<section class="cover"><span class="bleedmark">§bleed§</span>
   <svg class="rays" viewBox="0 0 100 100" preserveAspectRatio="none">{render.RAYS}</svg>
   <div class="ckicker">Kurdistan Region · Grade 12</div>
   <h1>SUNRISE<span>12</span></h1>

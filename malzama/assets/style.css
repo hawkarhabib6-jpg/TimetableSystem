@@ -409,3 +409,10 @@ bdi.x-ku{
 .keep > p.prompt:first-child{ margin-top:0; }
 .keep{ margin-top:7mm; }
 .keep:first-child{ margin-top:0; }
+
+/* Marks a full-bleed page for the footer pass; never seen, only read back
+   out of the text layer. */
+.bleedmark{
+  position:absolute; font-size:1pt; color:transparent; user-select:none;
+  top:0; left:0;
+}

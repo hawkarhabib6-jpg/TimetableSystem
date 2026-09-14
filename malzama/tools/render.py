@@ -2,6 +2,7 @@
 """Turn the classified blocks into the designed HTML book."""
 import json, re, os, html, sys, math
 from mixed import segments
+from textfix import clean
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -34,7 +35,7 @@ RAYS = ''.join(
 
 
 def esc(s):
-    return html.escape(s, quote=False)
+    return html.escape(clean(s), quote=False)
 
 
 def mix(text, host):
@@ -45,7 +46,7 @@ def mix(text, host):
     keeps its own direction.
     """
     out = []
-    for sc, chunk in segments(text):
+    for sc, chunk in segments(clean(text)):
         e = html.escape(chunk, quote=False)
         out.append(e if sc == host else f'<bdi class="x-{sc}">{e}</bdi>')
     return ''.join(out)
@@ -257,7 +258,7 @@ def render_range(blocks, start, end, unit_word, unit_no):
               if b['kind'] in ('heading', 'subheading') and 3 < len(b['text']) < 42][:9]
     toc = ''.join(f'<span>{esc(t)}</span>' for t in topics)
     out.append(f'''
-<section class="opener">
+<section class="opener"><span class="bleedmark">§bleed§</span>
   <svg class="rays" viewBox="0 0 100 100" preserveAspectRatio="none">{rays}</svg>
   <div class="kicker">Sunrise 12 · Companion</div>
   <div class="num">{unit_no:02d}</div>

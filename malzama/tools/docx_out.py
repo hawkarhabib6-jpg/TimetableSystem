@@ -18,6 +18,7 @@ from docx.oxml import OxmlElement
 
 import book
 from mixed import segments
+from textfix import clean
 from render import WORD2NUM, UNIT_TITLES, split_options, FORMULA_HINT
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -158,7 +159,7 @@ def rich(par, text, host, size=10, bold=False, italic=False, color=None,
     ku_font = ku_font or KU
     en_font = en_font or EN
     made = []
-    for sc, chunk in segments(text):
+    for sc, chunk in segments(clean(text)):
         font = ku_font if sc == 'ku' else en_font
         sz = size * (1.06 if sc == 'ku' and host == 'en' else 1)
         r = run(par, chunk, font, sz, bold=bold, italic=italic, color=color)
@@ -203,16 +204,121 @@ def set_margins(sec, top, bottom, left, right):
     sec.left_margin, sec.right_margin = Mm(left), Mm(right)
 
 
+FOOT_LEFT = 'Ibrahim Ahmad preparatory school'
+FOOT_CENTRE = 'پەیمانگای ژیر'
+FOOT_RIGHT = 'Shahid Aram preparatory school'
+
+
+def tab_stops(par, positions):
+    pPr = par._p.get_or_add_pPr()
+    drop(pPr, 'tabs')
+    tabs = OxmlElement('w:tabs')
+    for pos, align in positions:
+        t = OxmlElement('w:tab')
+        t.set(qn('w:val'), align)
+        t.set(qn('w:pos'), str(int(pos)))   # twentieths of a point
+        tabs.append(t)
+    insert_ordered(pPr, tabs)
+
+
+def set_footer(section, on):
+    """School line across the foot of every text page."""
+    section.footer.is_linked_to_previous = False
+    f = section.footer
+    for extra in f.paragraphs[1:]:
+        extra._p.getparent().remove(extra._p)
+    p = f.paragraphs[0]
+    for r in list(p.runs):
+        r._element.getparent().remove(r._element)
+    p.text = ''
+    if not on:
+        return
+    width = Mm(182).twips
+    tab_stops(p, [(width / 2, 'center'), (width, 'right')])
+    grey = RGBColor(0x7A, 0x86, 0x9F)
+    run(p, FOOT_LEFT, EN_SANS, 6.6, color=grey)
+    run(p, '\t', EN_SANS, 6.6)
+    r = run(p, FOOT_CENTRE, KU_DISP, 7.4, color=KU_C)
+    r._element.get_or_add_rPr().append(OxmlElement('w:rtl'))
+    run(p, '\t', EN_SANS, 6.6)
+    run(p, FOOT_RIGHT, EN_SANS, 6.6, color=grey)
+    borders(p._p.get_or_add_pPr(), top=(4, 'D8D2C8'))
+    spacing(p, 2, 0)
+
+
+def drop_trailing_empties(doc):
+    """Remove spacer paragraphs left at the end of the body.
+
+    Components leave an empty paragraph behind for spacing; one sitting just
+    before a section break becomes a blank page of its own.
+    """
+    body = doc.element.body
+    for el in reversed(list(body.iterchildren())):
+        if not el.tag.endswith('}p'):
+            break
+        if ''.join(el.itertext()).strip() or el.findall('.//' + qn('w:drawing')):
+            break
+        body.remove(el)
+
+
+def paragraphs_of(body):
+    return [el for el in body.iterchildren() if el.tag.endswith('}p')]
+
+
+def new_section(doc):
+    """Start a section without leaving an empty paragraph behind.
+
+    python-docx parks the outgoing section's properties in a paragraph of
+    their own, which prints as a blank page. Word keeps them on the last
+    paragraph of the section instead, so they are moved there.
+    """
+    sec = doc.add_section(WD_SECTION.NEW_PAGE)
+    body = doc.element.body
+    ps = paragraphs_of(body)
+    if len(ps) < 2:
+        return sec
+    holder = ps[-1]
+    pPr = holder.find(qn('w:pPr'))
+    sectPr = pPr.find(qn('w:sectPr')) if pPr is not None else None
+    prev = holder.getprevious()
+    if sectPr is None or prev is None or not prev.tag.endswith('}p'):
+        return sec
+    prevPr = prev.find(qn('w:pPr'))
+    if prevPr is None:
+        prevPr = OxmlElement('w:pPr')
+        prev.insert(0, prevPr)
+    prevPr.append(sectPr)
+    body.remove(holder)
+    return sec
+
+
+BLEED = (0, 0, 0, 0)
+BODY = (16, 15, 14, 14)
+
+
+def ensure_mode(doc, mode):
+    """Switch page geometry only when it actually changes.
+
+    Artwork pages run to the paper edge, text pages carry margins. Breaking
+    the section between two consecutive artwork pages would leave a stray
+    page between them, so the break happens only at a real transition.
+    """
+    if getattr(ensure_mode, 'cur', None) == mode:
+        return
+    drop_trailing_empties(doc)
+    sec = (doc.sections[0] if not paragraphs_of(doc.element.body)
+           else new_section(doc))
+    set_margins(sec, *(BLEED if mode == 'bleed' else BODY))
+    ensure_mode.cur = mode
+
+
 def fullpage(doc, path):
-    """Place one full-bleed page image in its own zero-margin section."""
-    s = doc.add_section(WD_SECTION.NEW_PAGE)
-    set_margins(s, 0, 0, 0, 0)
+    """Place one full-bleed page image."""
+    ensure_mode(doc, 'bleed')
     p = doc.add_paragraph()
     spacing(p, 0, 0)
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.add_run().add_picture(path, width=Mm(210), height=Mm(297))
-    s2 = doc.add_section(WD_SECTION.NEW_PAGE)
-    set_margins(s2, 16, 15, 14, 14)
 
 
 # ---------------------------------------------------------------- blocks
@@ -268,6 +374,7 @@ def build(blocks, units, doc):
             gi += 1
             fullpage(doc, path)
 
+    drop_trailing_empties(doc)   # the body starts with one empty paragraph
     next_gfx()   # cover
     next_gfx()   # contents
 
@@ -279,6 +386,7 @@ def build(blocks, units, doc):
         next_gfx()              # unit opener
         qn_ = 0
 
+        ensure_mode(doc, 'body')
         grouped = book.render.group(blocks, s, e)
 
         def translation(at):
@@ -569,6 +677,10 @@ def main():
     doc.sections[0].page_height = Mm(297)
 
     build(blocks, units, doc)
+
+    # Full-bleed sections run to the paper edge and carry no footer.
+    for sec in doc.sections:
+        set_footer(sec, sec.left_margin and sec.left_margin > 0)
 
     print('pictures placed:', getattr(build, 'pics', 0),
           '| unreadable:', getattr(build, 'skipped', 0))

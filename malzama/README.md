@@ -44,6 +44,14 @@ closing bracket with what it closes - and both outputs then set a font per run.
 `(base)` inside a Kurdish sentence keeps English brackets in the English face;
 `(کۆما)` keeps Kurdish brackets in the Kurdish face.
 
+Brackets also arrive damaged. The booklet opened an option list with "(a. …"
+in one paragraph and closed it with "… d. X)" several paragraphs later, so
+gathering those options into one card leaves the halves stranded, often beside
+an exam year that lost a bracket of its own. `tools/textfix.py` rebuilds the
+year's pair - from either side, "… correct) (2021" or "… b) 2018" - and drops
+whatever parenthesis is still unmatched. Across the book that is 368 damaged
+blocks, all balanced.
+
 Two further rules hold in both outputs:
 
 - A heading travels with the block beneath it (`.keep` in print, `w:keepNext`
@@ -51,6 +59,14 @@ Two further rules hold in both outputs:
 - A paragraph's translation is exactly the Kurdish that follows it. Taking only
   the first block would drop the rest of the same translation; running past it
   would absorb the next paragraph's.
+
+## Footer
+
+Every text page carries the school line. Chromium applies a footer template to
+all pages alike, so `tools/topdf.py` prints twice and takes the full-bleed pages
+from the footer-free pass, leaving the artwork unmarked; it finds those pages by
+sampling the saturated band each one ends on. Word gets a real footer, set on
+the body sections only.
 
 ## Output
 

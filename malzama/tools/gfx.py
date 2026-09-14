@@ -30,7 +30,7 @@ def main():
                   and 3 < len(b['text']) < 42][:9]
         toc = ''.join(f'<span>{render.esc(t)}</span>' for t in topics)
         pages.append(f'''
-<section class="opener">
+<section class="opener"><span class="bleedmark">§bleed§</span>
   <svg class="rays" viewBox="0 0 100 100" preserveAspectRatio="none">{render.RAYS}</svg>
   <div class="kicker">Sunrise 12 · Part {pi + 1}</div>
   <div class="num">{n:02d}</div>

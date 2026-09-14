@@ -30,7 +30,7 @@ FORMULA_HINT = re.compile(
 RAYS = ''.join(
     f'<line x1="50" y1="100" x2="{50 + 78 * math.cos(math.radians(a)):.2f}"'
     f' y2="{100 - 78 * math.sin(math.radians(a)):.2f}"'
-    f' stroke="#fff" stroke-width="{0.22 if i % 2 else 0.42}"/>'
+    f' stroke="#E9A85C" stroke-width="{0.22 if i % 2 else 0.42}"/>'
     for i, a in enumerate(range(6, 175, 7)))
 
 
@@ -279,6 +279,7 @@ def render_range(blocks, start, end, unit_word, unit_no):
     topics = [b['text'] for b in blocks[start:end]
               if b['kind'] in ('heading', 'subheading') and 3 < len(b['text']) < 42][:9]
     toc = ''.join(f'<span>{esc(t)}</span>' for t in topics)
+    done = int(round((unit_no - 1) / 8 * 100))
     out.append(f'''
 <section class="opener"><span class="bleedmark">§bleed§</span>
   <svg class="rays" viewBox="0 0 100 100" preserveAspectRatio="none">{rays}</svg>
@@ -287,6 +288,8 @@ def render_range(blocks, start, end, unit_word, unit_no):
   <div class="rule"></div>
   <div class="title">{esc(en_title)}</div>
   <div class="title-ku">{esc(ku_title)}</div>
+  <div class="progress"><div class="bar"><i style="width:{done}%"></i></div>
+    Unit {unit_no} of 8 &nbsp;·&nbsp; {done}% of this part behind you</div>
   <div class="toc">{toc}</div>
 </section>
 <div class="runhead"><span class="u">Unit {unit_no} · {esc(en_title)}</span>

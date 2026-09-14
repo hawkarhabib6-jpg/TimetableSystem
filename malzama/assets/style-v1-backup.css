@@ -4,61 +4,32 @@
    ============================================================ */
 
 :root{
-  /* ============================================================
-     "Dawn" palette.
-
-     The audience is the final year of secondary school: a high-stakes,
-     high-anxiety year. Three things follow from that.
-
-     Red is demoted almost to zero. In a classroom red means "wrong", and
-     this is a book of practice questions - the last thing its reader needs
-     is the colour of a corrected paper on every page.
-
-     The warm end of the palette is dawn light rather than sunset: the book
-     is called Sunrise, and a page should read as a beginning.
-
-     Saturation stays low and flat tints stay light. That lowers visual
-     load for a reader under pressure, and it survives cheap offset and
-     photocopying, where a heavy gradient bands and bleeds.
-     ============================================================ */
-
   /* Ink & paper */
-  --ink:        #1B2A41;   /* softer than black; less glare on dull paper */
-  --ink-soft:   #44556E;
-  --ink-faint:  #7E8DA3;
-  --paper:      #FFFDF9;   /* warm white */
-  --rule:       #E4E0D8;
-  --rule-soft:  #F0ECE4;
+  --ink:        #12203A;
+  --ink-soft:   #3D4B66;
+  --ink-faint:  #7A869F;
+  --paper:      #FFFDFB;
+  --rule:       #E7E2DA;
+  --rule-soft:  #F1EDE6;
 
-  /* Structure - calm, unalarming */
-  --sea:        #2E6E8E;
-  --sea-wash:   #EFF6F9;
+  /* Sunrise — the book's own identity */
+  --sun-1:      #FFB13D;
+  --sun-2:      #F5643B;
+  --sun-deep:   #D4442A;
+  --sun-wash:   #FFF4E6;
 
-  /* Dawn light - warmth and lift */
-  --sun-1:      #FFD79B;
-  --sun-2:      #F7B267;
-  --sun-deep:   #C77B3C;
-  --sun-wash:   #FFF6E9;
+  /* Kurdish track (keeps the author's violet coding) */
+  --ku:         #5F3FA8;
+  --ku-soft:    #8A6FC7;
+  --ku-wash:    #F7F4FD;
 
-  /* Kurdish track */
-  --ku:         #574C8C;
-  --ku-soft:    #8E84C0;
-  --ku-wash:    #F5F3FB;
-
-  /* Achievement */
-  --answer:     #2E7D6B;
-  --answer-wash:#EEF6F3;
-
-  /* Teacher's note */
-  --tb:         #8A6A2F;
-  --tb-wash:    #FBF5EA;
-
-  /* Practice */
-  --quiz:       #2E6E8E;
-  --quiz-wash:  #EFF6F9;
-
-  /* Reserved: genuine "avoid this", used sparingly and nowhere else. */
-  --care:       #B4483C;
+  /* Semantic */
+  --answer:     #0E7C66;
+  --answer-wash:#EDF7F4;
+  --tb:         #A4640B;
+  --tb-wash:    #FFF7EA;
+  --quiz:       #1B5FA8;
+  --quiz-wash:  #F0F6FD;
 
   /* Type */
   --en-serif: 'Source Serif 4', Georgia, serif;
@@ -82,7 +53,7 @@ html{ -webkit-print-color-adjust:exact; print-color-adjust:exact; background:var
 body{
   margin:0; background:var(--paper); color:var(--ink);
   font-family:var(--en-serif);
-  font-size:10.2pt; line-height:1.62;
+  font-size:10.2pt; line-height:1.5;
   text-rendering:optimizeLegibility;
   font-variant-numeric:oldstyle-nums;
 }
@@ -91,45 +62,38 @@ body{
 .opener{
   position:relative; break-after:page; break-inside:avoid;
   page:bleed; width:210mm; height:297mm; margin:0; padding:46mm 20mm 0;
-  overflow:hidden; color:var(--ink);
+  overflow:hidden; color:#fff;
   background:
-    linear-gradient(180deg, #EEF4F8 0%, #F8F4EE 48%, var(--sun-wash) 78%, #FFE6C2 100%);
+    radial-gradient(120% 78% at 50% 116%, var(--sun-1) 0%, var(--sun-2) 42%, #7A2E62 78%, #241436 100%);
 }
-.opener .rays{
-  position:absolute; inset:0; width:100%; height:100%; opacity:.4;
-  -webkit-mask-image:linear-gradient(to top, #000 0%, #000 22%, transparent 68%);
-          mask-image:linear-gradient(to top, #000 0%, #000 22%, transparent 68%);
-}
+.opener .rays{ position:absolute; inset:0; opacity:.30; }
 .opener .num{
   font-family:var(--en-sans); font-weight:800; font-size:150pt;
   line-height:.82; letter-spacing:-.05em;
-  color:transparent; -webkit-text-stroke:1.5pt var(--sun-2);
+  color:transparent; -webkit-text-stroke:1.6pt rgba(255,255,255,.65);
 }
 .opener .kicker{
-  font-family:var(--en-sans); font-weight:600; font-size:10pt;
-  letter-spacing:.34em; text-transform:uppercase; color:var(--sea);
-  margin-bottom:6mm;
+  font-family:var(--en-sans); font-weight:600; font-size:10.5pt;
+  letter-spacing:.34em; text-transform:uppercase; opacity:.85; margin-bottom:6mm;
 }
 .opener .title{
-  font-family:var(--en-sans); font-weight:700; font-size:30pt;
-  line-height:1.08; margin:9mm 0 3mm; letter-spacing:-.018em;
-  max-width:150mm; color:var(--ink);
+  font-family:var(--en-sans); font-weight:700; font-size:31pt;
+  line-height:1.08; margin:9mm 0 3mm; letter-spacing:-.018em; max-width:150mm;
 }
 .opener .title-ku{
-  font-family:var(--ku-disp); font-weight:700; font-size:18pt;
-  direction:rtl; text-align:left; max-width:150mm; color:var(--ku);
+  font-family:var(--ku-disp); font-weight:700; font-size:19pt;
+  direction:rtl; text-align:left; opacity:.93; max-width:150mm;
 }
-.opener .rule{ width:34mm; height:2.2pt; background:var(--sun-2); margin:7mm 0; }
+.opener .rule{ width:34mm; height:2.2pt; background:rgba(255,255,255,.85); margin:7mm 0; }
 .opener .toc{
   position:absolute; right:20mm; bottom:24mm; left:20mm;
-  border-top:.6pt solid rgba(27,42,65,.2); padding-top:5mm;
+  border-top:.6pt solid rgba(255,255,255,.35); padding-top:5mm;
   display:flex; flex-wrap:wrap; gap:2.5mm 4mm;
-  font-family:var(--en-sans); font-size:8.4pt; font-weight:500;
-  color:var(--ink-soft);
+  font-family:var(--en-sans); font-size:8.4pt; font-weight:500; opacity:.9;
 }
 .opener .toc span{
-  border:.6pt solid rgba(27,42,65,.22); border-radius:20pt;
-  padding:1.1mm 3.4mm; white-space:nowrap; background:rgba(255,255,255,.5);
+  border:.6pt solid rgba(255,255,255,.45); border-radius:20pt;
+  padding:1.1mm 3.4mm; white-space:nowrap;
 }
 
 /* ---------- Running head ---------- */
@@ -140,7 +104,8 @@ body{
 .runhead .u{
   font-family:var(--en-sans); font-weight:700; font-size:7.6pt;
   letter-spacing:.16em; text-transform:uppercase; color:#fff;
-  background:var(--sea); border-radius:20pt; padding:1.3mm 4mm;
+  background:linear-gradient(100deg,var(--sun-2),var(--sun-deep));
+  border-radius:20pt; padding:1.3mm 4mm;
 }
 .runhead .t{ display:none; }
 
@@ -155,21 +120,6 @@ h2.sec::before{
   content:''; width:3.4mm; height:3.4mm; border-radius:1pt; flex:none;
   background:linear-gradient(135deg,var(--sun-1),var(--sun-2));
 }
-
-/* Progress through the book. Seeing how much is already behind you is a
-   steadier motivator than a page count, and it costs one thin rule. */
-.progress{
-  position:absolute; left:20mm; right:20mm; bottom:38mm;
-  font-family:var(--en-sans); font-size:8pt; color:var(--ink-soft);
-}
-.progress .bar{
-  height:1.6mm; border-radius:20pt; background:rgba(27,42,65,.12);
-  margin-bottom:2mm; overflow:hidden;
-}
-.progress .bar i{
-  display:block; height:100%; border-radius:20pt;
-  background:linear-gradient(90deg,var(--sun-2),var(--sun-deep));
-}
 h3.sub{
   font-family:var(--en-sans); font-weight:650; font-size:11pt;
   margin:6mm 0 2mm; color:var(--ink); break-after:avoid;
@@ -178,11 +128,11 @@ h3.sub{
 h3.sub.ku{ font-family:var(--ku-disp); direction:rtl; text-align:right; font-size:12pt; }
 
 /* ---------- Body text ---------- */
-p{ margin:0 0 2.6mm; }
+p{ margin:0 0 2.2mm; }
 .en{ font-family:var(--en-serif); }
 .ku{
   font-family:var(--ku-body); direction:rtl; text-align:right; unicode-bidi:isolate;
-  font-size:11.4pt; line-height:2.05; color:var(--ku);
+  font-size:11.4pt; line-height:1.95; color:var(--ku);
 }
 
 /* Bilingual pair: English above, Kurdish in a tinted rail below. */
@@ -197,8 +147,8 @@ p{ margin:0 0 2.6mm; }
 /* ---------- Q & A card ---------- */
 .qa{
   break-inside:avoid; margin:0 0 4mm; padding:3.4mm 4mm 3mm;
-  border:0; border-left:2.4pt solid var(--quiz);
-  border-radius:0 2.5pt 2.5pt 0; background:var(--quiz-wash);
+  border:.7pt solid var(--rule); border-left:2.6pt solid var(--quiz);
+  border-radius:2.5pt; background:#fff;
 }
 .qa .q{
   font-family:var(--en-sans); font-weight:650; font-size:10.2pt;
@@ -211,7 +161,8 @@ p{ margin:0 0 2.6mm; }
 }
 .qa .a{
   font-family:var(--en-serif); color:var(--answer); font-weight:600;
-  background:transparent; padding:.4mm 0 .4mm 1mm; margin:0 0 1.6mm;
+  background:var(--answer-wash); border-radius:2pt;
+  padding:1.5mm 3mm; margin:0 0 1.6mm;
 }
 .qa .a::before{
   content:'✓'; font-family:var(--en-sans); font-weight:700;
@@ -239,8 +190,8 @@ p{ margin:0 0 2.6mm; }
 .tb{
   break-inside:avoid; position:relative; margin:3.5mm 0 4mm;
   padding:3.2mm 4mm 3mm 12mm;
-  background:var(--tb-wash); border:0; border-left:2pt solid #E0C48C;
-  border-radius:0 2.5pt 2.5pt 0; font-size:9.8pt; color:#4A3A1C;
+  background:var(--tb-wash); border:.7pt solid #F0DFC0;
+  border-radius:2.5pt; font-size:9.8pt; color:#4A3A1C;
 }
 .tb::before{
   content:'T.B'; position:absolute; left:2.6mm; top:3.1mm;
@@ -266,7 +217,8 @@ p{ margin:0 0 2.6mm; }
 /* ---------- Grammar formula ---------- */
 .formula{
   break-inside:avoid; margin:3.5mm 0 4mm; padding:4mm;
-  border:0; border-radius:3pt; background:var(--sun-wash);
+  border:.8pt dashed #C9BFAE; border-radius:3pt;
+  background:linear-gradient(180deg,#FFFDF8,#FFF9F0);
   display:flex; flex-wrap:wrap; align-items:center; justify-content:center;
   gap:2mm 2.4mm;
 }
@@ -275,7 +227,7 @@ p{ margin:0 0 2.6mm; }
   background:#fff; border:.8pt solid var(--rule); border-radius:2.5pt;
   padding:1.6mm 3.2mm; color:var(--ink);
 }
-.formula .chip.key{ background:var(--sea); color:#fff; border-color:var(--sea); }
+.formula .chip.key{ background:var(--ink); color:#fff; border-color:var(--ink); }
 .formula .chip.stack{ display:flex; flex-direction:column; gap:.9mm; padding:1.4mm 2.4mm; }
 .formula .chip.stack i{ font-style:normal; font-size:8.6pt; color:var(--sun-deep); font-weight:600; }
 .formula .op{ font-family:var(--en-sans); font-weight:700; color:var(--ink-faint); font-size:11pt; }
@@ -287,7 +239,7 @@ table.grid{
   border:.7pt solid var(--rule); border-radius:3pt; overflow:hidden;
 }
 table.grid th{
-  background:var(--sea); color:#fff; text-align:left;
+  background:var(--ink); color:#fff; text-align:left;
   font-family:var(--en-sans); font-weight:650; font-size:8.6pt;
   letter-spacing:.03em; padding:2.2mm 3mm;
 }
@@ -316,12 +268,12 @@ figcaption{
 /* ---------- Question bank banner ---------- */
 .bank{
   break-inside:avoid; margin:8mm 0 4mm; padding:3mm 4mm;
-  background:linear-gradient(100deg,var(--sea),#245B77);
+  background:linear-gradient(100deg,var(--ink),#28406B);
   color:#fff; border-radius:3pt;
   font-family:var(--en-sans); font-weight:700; font-size:11.5pt;
   display:flex; align-items:center; justify-content:space-between;
 }
-.bank .ku{ font-family:var(--ku-disp); font-size:10.5pt; color:var(--sun-1); background:none; border:0; padding:0; }
+.bank .ku{ font-family:var(--ku-disp); font-size:10.5pt; color:#FFD9A8; background:none; border:0; padding:0; }
 
 /* ---------- Utility ---------- */
 .plain{ margin:0 0 2.2mm; }
@@ -353,72 +305,37 @@ bdi{ unicode-bidi:isolate; font-family:var(--en-serif); }
    Front matter & part dividers
    ============================================================ */
 .cover{
-  /* Dawn, not dusk: the light rises from the horizon into an open sky.
-     Light tints also print cleanly where a dark gradient would band on
-     cheap offset, and they cost a fraction of the ink. */
   page:bleed; position:relative; width:210mm; height:297mm; margin:0;
-  padding:46mm 22mm 0; overflow:hidden; color:var(--ink); break-after:page;
-  background:
-    linear-gradient(180deg, #E9F0F6 0%, #F4F1EB 40%, var(--sun-wash) 64%,
-                    #FFE9C9 84%, #FFD79B 100%);
+  padding:52mm 22mm 0; overflow:hidden; color:#fff; break-after:page;
+  background:radial-gradient(120% 80% at 50% 118%,
+    #FFC259 0%, var(--sun-1) 26%, var(--sun-2) 50%, #8E2F66 80%, #1B1030 100%);
 }
-.cover .rays{
-  position:absolute; inset:0; width:100%; height:100%; opacity:.45;
-  -webkit-mask-image:linear-gradient(to top, #000 0%, #000 26%, transparent 74%);
-          mask-image:linear-gradient(to top, #000 0%, #000 26%, transparent 74%);
-}
+.cover .rays{ position:absolute; inset:0; opacity:.26; }
 .cover .ckicker{
-  font-family:var(--en-sans); font-weight:600; font-size:9.5pt;
-  letter-spacing:.34em; text-transform:uppercase; color:var(--sea);
+  font-family:var(--en-sans); font-weight:600; font-size:10pt;
+  letter-spacing:.36em; text-transform:uppercase; opacity:.88;
 }
 .cover h1{
-  font-family:var(--en-sans); font-weight:800; font-size:56pt;
-  letter-spacing:-.035em; line-height:.94; margin:9mm 0 0; color:var(--ink);
+  font-family:var(--en-sans); font-weight:800; font-size:60pt;
+  letter-spacing:-.035em; line-height:.94; margin:10mm 0 0;
   display:flex; align-items:baseline; gap:5mm;
 }
 .cover h1 span{
-  font-size:38pt; color:transparent; -webkit-text-stroke:1.3pt var(--sun-deep);
+  font-size:40pt; color:transparent; -webkit-text-stroke:1.4pt rgba(255,255,255,.8);
 }
 .cover .csub{
-  font-family:var(--en-sans); font-weight:500; font-size:14pt;
-  color:var(--ink-soft); margin-top:3mm; letter-spacing:-.01em;
+  font-family:var(--en-sans); font-weight:500; font-size:15pt;
+  opacity:.93; margin-top:3mm; letter-spacing:-.01em;
 }
 .cover .cku{
-  font-family:var(--ku-disp); font-weight:700; font-size:14pt;
-  direction:rtl; text-align:left; margin-top:8mm; line-height:1.75;
-  max-width:150mm; color:var(--ku);
+  font-family:var(--ku-disp); font-weight:700; font-size:15pt;
+  direction:rtl; text-align:left; margin-top:9mm; line-height:1.7; max-width:150mm;
 }
-.cover .quote{
-  /* The author's own epigraph, given the room it deserves. For a reader in
-     an exam year the cover's job is not decoration but a reason to open the
-     book. */
-  position:absolute; left:22mm; right:22mm; bottom:50mm;
-  max-width:146mm;
-}
-.cover .quote p{
-  font-family:var(--en-serif); font-style:italic; font-size:13pt;
-  line-height:1.5; color:var(--ink); margin:0 0 4mm;
-}
-.cover .quote .ku{
-  font-family:var(--ku-body); direction:rtl; text-align:right;
-  font-size:12pt; line-height:1.9; color:var(--ku); margin:0 0 3mm;
-  background:none; border:0; padding:0;
-}
-.cover .quote .by{
-  font-family:var(--en-sans); font-size:8.4pt; letter-spacing:.18em;
-  text-transform:uppercase; color:var(--ink-faint);
-}
-.cover .sun{
-  position:absolute; left:50%; bottom:-30mm; transform:translateX(-50%);
-  width:120mm; height:120mm; border-radius:50%;
-  background:radial-gradient(circle, #FFE3AE 0%, rgba(255,227,174,0) 68%);
-}
-
 .cover .cfoot{
-  position:absolute; left:22mm; right:22mm; bottom:20mm;
-  border-top:.6pt solid rgba(27,42,65,.22); padding-top:4.5mm;
-  font-family:var(--en-sans); font-size:8.4pt; letter-spacing:.12em;
-  text-transform:uppercase; color:var(--ink-soft);
+  position:absolute; left:22mm; right:22mm; bottom:24mm;
+  border-top:.6pt solid rgba(255,255,255,.4); padding-top:5mm;
+  font-family:var(--en-sans); font-size:9pt; letter-spacing:.12em;
+  text-transform:uppercase; opacity:.85;
 }
 
 .toc-page{ break-after:page; }
@@ -449,15 +366,15 @@ bdi{ unicode-bidi:isolate; font-family:var(--en-serif); }
 .divider{
   page:bleed; position:relative; width:210mm; height:297mm; margin:0;
   padding:96mm 26mm 0; break-before:page; break-after:page; color:var(--ink);
-  background:linear-gradient(180deg,#F3F7FA 0%,#FBF7F0 55%,var(--sun-wash) 100%);
+  background:linear-gradient(160deg,#FFF6E9 0%,#FFEEDC 46%,#FCE3D3 100%);
 }
 .divider::after{
-  content:''; position:absolute; left:0; right:0; bottom:0; height:6mm;
-  background:linear-gradient(90deg,var(--sea),var(--sun-2),var(--sun-1));
+  content:''; position:absolute; left:0; right:0; bottom:0; height:7mm;
+  background:linear-gradient(90deg,var(--sun-1),var(--sun-2),#8E2F66);
 }
 .divider .dnum{
   font-family:var(--en-sans); font-weight:700; font-size:9.5pt;
-  letter-spacing:.34em; text-transform:uppercase; color:var(--sea);
+  letter-spacing:.34em; text-transform:uppercase; color:var(--sun-deep);
 }
 .divider h1{
   font-family:var(--en-sans); font-weight:800; font-size:40pt;

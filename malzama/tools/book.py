@@ -73,11 +73,19 @@ def front_matter(units):
                  f'<span class="ku">{esc(ku)}</span></h3><ul>{items}</ul></div>')
     return f'''
 <section class="cover"><span class="bleedmark">§bleed§</span>
+  <div class="sun"></div>
   <svg class="rays" viewBox="0 0 100 100" preserveAspectRatio="none">{render.RAYS}</svg>
   <div class="ckicker">Kurdistan Region · Grade 12</div>
   <h1>SUNRISE<span>12</span></h1>
   <div class="csub">Companion &amp; Study Guide</div>
   <div class="cku">مەلزەمەی تەواوی بابەتی ئینگلیزی — پۆلی دوازدەی ئامادەیی</div>
+  <div class="quote">
+    <p>Education is the passport to the future, for tomorrow belongs to
+       those who prepare for today.</p>
+    <p class="ku">پەروەردە پاسپۆرتی داهاتووە، سبەی هی ئەو کەسانەیە
+       کە ئەمڕۆ خۆیانی بۆ ئامادە دەکەن.</p>
+    <div class="by">Malcolm X</div>
+  </div>
   <div class="cfoot">Grammar · Reading · Apsod · Activities · Question Bank</div>
 </section>
 

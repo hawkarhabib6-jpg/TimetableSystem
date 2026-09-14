@@ -17,6 +17,45 @@ the `Ali_K_*` fonts installed (`ثةروةردة` is really `پەروەردە`).
 converted to Unicode once, up front, so the text is searchable, spell-checkable
 and renders on any machine.
 
+## Who this is for
+
+The reader is in the final year of secondary school in the Kurdistan Region:
+around eighteen, a year that decides university placement, and under sustained
+pressure. Three decisions follow from that, and they are the reason the palette
+looks the way it does.
+
+**Red is demoted almost to zero.** In a classroom red means *wrong*. This is a
+book of practice questions, and its reader does not need the colour of a
+corrected paper on every page. The first version used red and hot orange as its
+main accents; both are gone. A single reserved token, `--care`, remains for a
+genuine "avoid this", and is used almost nowhere. (Elliot & Maier's work on red
+in achievement settings points the same way, though the effect itself is
+contested; the classroom convention is reason enough on its own.)
+
+**The cover is dawn, not dusk.** The first version ran dark navy to sunset
+orange - striking, but it reads as a day ending. The book is called Sunrise and
+its reader needs a page that reads as a beginning, so the light now rises from
+the foot of the page into an open sky, and the author's own epigraph sits where
+there was empty space.
+
+**Fewer frames, more air.** Every component used to be a box with a border. Now
+a tint and one coloured edge do the same work, leading is looser, and the type
+is dark blue-slate rather than black. Material that is easier to read is judged
+easier to learn - the processing-fluency effect - which matters most for a
+reader deciding whether to keep going.
+
+Unit openers carry a progress bar. Seeing what is already behind you is a
+steadier motivator than a page number.
+
+## Print engineering
+
+The design also has to survive the press it will actually meet. Flat light
+tints print cleanly on cheap offset and photocopy legibly; the heavy dark
+gradients of the first version band, bleed on low-brightness stock, and cost
+several times the ink over four hundred pages. Rules are kept at 0.5pt or
+above so they do not drop out, and body type is set on warm white rather than
+pure white to cut glare on dull paper.
+
 ## Design system
 
 `assets/style.css` styles by meaning rather than by the ad-hoc colours the

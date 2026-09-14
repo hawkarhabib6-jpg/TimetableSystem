@@ -419,3 +419,14 @@ bdi.x-ku{
   position:absolute; font-size:1pt; color:transparent; user-select:none;
   top:0; left:0;
 }
+
+/* List marker at the head of a Kurdish line. Isolated so its digits are
+   placed by the layout rather than by bidi resolution. */
+.ku .mk{
+  direction:ltr; unicode-bidi:isolate; display:inline-block;
+  font-family:var(--en-sans); font-weight:700; font-size:.82em;
+  color:#fff; background:var(--ku-soft); border-radius:20pt;
+  min-width:4.6mm; padding:.2mm 1.6mm; text-align:center;
+  margin-inline-end:2.2mm; vertical-align:.4mm;
+}
+.tb .ku .mk{ background:var(--tb); }

@@ -18,7 +18,7 @@ from docx.oxml import OxmlElement
 
 import book
 from mixed import segments
-from textfix import clean
+from textfix import clean, split_marker
 from render import WORD2NUM, UNIT_TITLES, split_options, FORMULA_HINT
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -368,6 +368,11 @@ def fullpage(doc, path):
 def add_ku(doc_or_cell, text, size=10.5, color=KU_C, indent=True):
     p = (cellpar(doc_or_cell) if hasattr(doc_or_cell, '_tc')
          else doc_or_cell.add_paragraph())
+    marker, text = split_marker(text)
+    if marker:
+        # Written first and left-to-right, so the number opens the line
+        # rather than landing wherever bidi resolves its digits.
+        run(p, f'{marker}-  ', EN_SANS, size * .92, bold=True, color=KU_C)
     rich(p, text, 'ku', size, color=color)
     rtl(p)
     spacing(p, 0, 3, 1.45)

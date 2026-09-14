@@ -2,7 +2,7 @@
 """Turn the classified blocks into the designed HTML book."""
 import json, re, os, html, sys, math
 from mixed import segments
-from textfix import clean
+from textfix import clean, split_marker
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -58,6 +58,21 @@ def esc_ku(s):
 
 def esc_en(s):
     return mix(s, 'en')
+
+
+def ku_html(text):
+    """Inner HTML for a Kurdish paragraph, with any list marker placed.
+
+    Where the marker sits on the page otherwise depends on how the bidi
+    algorithm resolves the digits and brackets around it, which is why the
+    source's "2-(on)" and "(In) -1" landed differently. Pulling the number
+    out and emitting it first puts it at the start of the line every time.
+    """
+    marker, rest = split_marker(text)
+    body = esc_ku(rest)
+    if marker is None:
+        return body
+    return f'<span class="mk">{esc(marker)}</span>{body}' 
 
 
 def is_ku(b):
@@ -331,9 +346,9 @@ def render_range(blocks, start, end, unit_word, unit_no):
 
         if k == 'tb':
             t = re.sub(r'^\s*T\.?\s*B\s*\d*\s*[:/]?\s*', '', t, flags=re.I)
-            body = f'<p class="{"ku" if is_ku(b) else "en"} plain">{esc_ku(t) if is_ku(b) else esc(t)}</p>'
+            body = f'<p class="{"ku" if is_ku(b) else "en"} plain">{ku_html(t) if is_ku(b) else esc(t)}</p>'
             if ku:
-                body += ''.join(f'<p class="ku plain">{esc_ku(x)}</p>'
+                body += ''.join(f'<p class="ku plain">{ku_html(x)}</p>'
                                 for x in ku_all)
                 i += ku_n
             out.append(f'<div class="tb">{body}</div>')
@@ -388,7 +403,7 @@ def render_range(blocks, start, end, unit_word, unit_no):
                         f'<span>{esc(lead)}</span></p>' if lead else
                         f'<p class="q"><span class="n">{qn}</span>'
                         f'<span>Choose the correct answer</span></p>')
-                kub = ''.join(f'<p class="ku">{esc_ku(x)}</p>' for x in ku_all)
+                kub = ''.join(f'<p class="ku">{ku_html(x)}</p>' for x in ku_all)
                 i += ku_n
                 out.append(f'<div class="qa">{head}'
                            f'<div class="mcq {wide}">{items}</div>{kub}</div>')
@@ -404,7 +419,7 @@ def render_range(blocks, start, end, unit_word, unit_no):
                 ans = f'<p class="a">{esc(nxt["text"])}</p>'
                 i += 1
                 ku_all, ku_n = translation(i)
-            kub = ''.join(f'<p class="ku">{esc_ku(x)}</p>' for x in ku_all)
+            kub = ''.join(f'<p class="ku">{ku_html(x)}</p>' for x in ku_all)
             i += ku_n
             out.append(f'<div class="qa"><p class="q"><span class="n">{qn}</span>'
                        f'<span>{esc(t)}</span></p>{ans}{kub}</div>')
@@ -412,14 +427,14 @@ def render_range(blocks, start, end, unit_word, unit_no):
             continue
 
         if k == 'kurdish':
-            out.append(f'<p class="ku plain">{esc_ku(t)}</p>')
+            out.append(f'<p class="ku plain">{ku_html(t)}</p>')
             i += 1
             continue
 
         # text / answer, optionally paired with its Kurdish translation
         cls = 'a' if k == 'answer' else 'en'
         if ku_all:
-            kub = ''.join(f'<p class="ku">{esc_ku(x)}</p>' for x in ku_all)
+            kub = ''.join(f'<p class="ku">{ku_html(x)}</p>' for x in ku_all)
             out.append(f'<div class="pair"><p class="en">{esc_en(t)}</p>'
                        f'{kub}</div>')
             i += 1 + ku_n

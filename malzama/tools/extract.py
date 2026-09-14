@@ -9,6 +9,7 @@ import json, re, sys, os
 import docx
 from docx.oxml.ns import qn
 from alik import convert
+from textfix import fill_marker_gaps
 
 SRC = os.path.join(os.path.dirname(__file__), '..', 'src', 'malzama.docx')
 OUT = os.path.join(os.path.dirname(__file__), '..', 'build', 'doc.json')
@@ -183,6 +184,8 @@ def main():
             blocks.append({'kind': 'table', 'rows': rows,
                            'script': script_of(' '.join(' '.join(r) for r in rows))})
 
+    gaps = fill_marker_gaps(blocks)
+
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     json.dump(blocks, open(OUT, 'w', encoding='utf8'),
               ensure_ascii=False, indent=1)
@@ -193,6 +196,7 @@ def main():
     for k, n in c.most_common():
         print(f'  {k:12s} {n}')
     print('images referenced:', sum(len(b.get("images", [])) for b in blocks))
+    print('list markers the author left out:', gaps)
 
 
 if __name__ == '__main__':

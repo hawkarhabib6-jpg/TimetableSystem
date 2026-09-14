@@ -16,6 +16,32 @@ _SPACED_YEAR = re.compile(r'\(\s+(' + YEAR + r')\s*\)')
 
 OPEN, CLOSE = '(', ')'
 
+KU_LETTER = r'[\u0600-\u06FF]'
+
+# A list marker was typed three different ways - "2-(on)", "(In) -1", "-4 (by)"
+# - and where it lands on the page then depends on the bidi algorithm rather
+# than on the author. Each form is recognised so the marker can be placed
+# deliberately instead.
+_MARKERS = (
+    re.compile(r'^\s*\(\s*([A-Za-z][^()]{0,34})\)\s*[-–]\s*(\d{1,2})\s*[-–.)]?\s*'),
+    re.compile(r'^\s*[-–]\s*(\d{1,2})\s*[-–.)]?\s*'),
+    re.compile(r'^\s*(\d{1,2})\s*[-–.)]\s*'),
+)
+
+
+def split_marker(text):
+    """-> (marker, rest) with the marker as a plain number, or (None, text)."""
+    if not text:
+        return None, text
+    m = _MARKERS[0].match(text)
+    if m:
+        return m.group(2), f'({m.group(1).strip()}) ' + text[m.end():]
+    for pat in _MARKERS[1:]:
+        m = pat.match(text)
+        if m and re.search(KU_LETTER, text[m.end():m.end() + 40] or ''):
+            return m.group(1), text[m.end():]
+    return None, text
+
 
 _TRAILING_YEAR = re.compile(r'(' + YEAR + r'[^()]{0,18})\s*$')
 _LEADING_YEAR = re.compile(r'^\s*(' + YEAR + r')')
@@ -76,6 +102,8 @@ def clean(text):
     text = re.sub(r'\(\s+', '(', text)
     text = re.sub(r'\s+\)', ')', text)
     text = re.sub(r'(?<=[^\s(])\(', ' (', text)
+    # A bracketed English term running straight into Kurdish needs a space.
+    text = re.sub(r'\)(?=' + KU_LETTER + r')', ') ', text)
     text = re.sub(r'[ \t]{2,}', ' ', text)
     return text.strip()
 
@@ -91,3 +119,39 @@ if __name__ == '__main__':
               'A &C)',
               'This sentence (correct) stays (as is).']:
         print(f'  {s!r}\n→ {clean(s)!r}\n')
+
+
+def fill_marker_gaps(blocks):
+    """Number a line the author left out of an otherwise complete series.
+
+    The prepositions list runs 1,2,3,4,(unnumbered),6,7,8,9: one entry was
+    typed without its number. Where exactly one unnumbered Kurdish line of
+    the same shape sits between marker N and marker N+2, it is that series'
+    N+1 and is labelled accordingly. Returns how many were filled.
+    """
+    marked = []
+    for i, b in enumerate(blocks):
+        if b.get('script') != 'ku' or not b.get('text'):
+            continue
+        n, _ = split_marker(b['text'])
+        marked.append((i, int(n) if n else None))
+
+    filled = 0
+    for pos in range(len(marked) - 1):
+        i, n = marked[pos]
+        if n is None:
+            continue
+        # next numbered line in the same run
+        nxt = next(((j, m) for j, m in marked[pos + 1:] if m is not None), None)
+        if not nxt:
+            break
+        j, m = nxt
+        if m != n + 2:
+            continue
+        between = [k for k, v in marked if i < k < j and v is None]
+        if len(between) != 1:
+            continue
+        k = between[0]
+        blocks[k]['text'] = f'{n + 1}- ' + blocks[k]['text'].lstrip()
+        filled += 1
+    return filled

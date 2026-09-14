@@ -17,6 +17,7 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
 import book
+from mixed import segments
 from render import WORD2NUM, UNIT_TITLES, split_options, FORMULA_HINT
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -117,8 +118,8 @@ def rtl(par):
     par.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     for r in par.runs:
         rPr = r._element.get_or_add_rPr()
-        e = OxmlElement('w:rtl')
-        rPr.append(e)
+        if rPr.find(qn('w:rtl')) is None:
+            rPr.append(OxmlElement('w:rtl'))
 
 
 def spacing(par, before=0, after=3, line=None):
@@ -145,6 +146,34 @@ def run(par, text, font=EN, size=10, bold=False, italic=False, color=None):
     for a in ('w:ascii', 'w:hAnsi', 'w:cs', 'w:eastAsia'):
         rf.set(qn(a), font)
     return r
+
+
+def rich(par, text, host, size=10, bold=False, italic=False, color=None,
+         ku_font=None, en_font=None):
+    """Write text as one run per script, each in its own font.
+
+    A bracket belongs to whatever it encloses, so the runs come from
+    mixed.segments rather than from a naive split on character ranges.
+    """
+    ku_font = ku_font or KU
+    en_font = en_font or EN
+    made = []
+    for sc, chunk in segments(text):
+        font = ku_font if sc == 'ku' else en_font
+        sz = size * (1.06 if sc == 'ku' and host == 'en' else 1)
+        r = run(par, chunk, font, sz, bold=bold, italic=italic, color=color)
+        if sc == 'ku':
+            rPr = r._element.get_or_add_rPr()
+            rPr.append(OxmlElement('w:rtl'))
+        made.append(r)
+    return made
+
+
+def keep_next(par):
+    """Word's own 'keep with next', so a heading is never left page-bottom."""
+    pPr = par._p.get_or_add_pPr()
+    drop(pPr, 'keepNext')
+    insert_ordered(pPr, OxmlElement('w:keepNext'))
 
 
 def onecell(doc, fill=None, left=None, edge=None):
@@ -190,7 +219,7 @@ def fullpage(doc, path):
 def add_ku(doc_or_cell, text, size=10.5, color=KU_C, indent=True):
     p = (cellpar(doc_or_cell) if hasattr(doc_or_cell, '_tc')
          else doc_or_cell.add_paragraph())
-    run(p, text, KU, size, color=color)
+    rich(p, text, 'ku', size, color=color)
     rtl(p)
     spacing(p, 0, 3, 1.45)
     if indent and not hasattr(doc_or_cell, '_tc'):
@@ -202,7 +231,7 @@ def add_ku(doc_or_cell, text, size=10.5, color=KU_C, indent=True):
 
 def add_en(doc, text, size=10, bold=False, color=None, font=EN):
     p = doc.add_paragraph()
-    run(p, text, font, size, bold=bold, color=color)
+    rich(p, text, 'en', size, bold=bold, color=color, en_font=font)
     spacing(p, 0, 3)
     return p
 
@@ -223,7 +252,7 @@ def add_mcq(cell_or_doc, opts):
                 left=None, right=None)
         p = c.paragraphs[0]
         run(p, f'({letter})  ', EN_SANS, 8, bold=True, color=INK)
-        run(p, text, EN, 9.5)
+        rich(p, text, 'en', 9.5)
         spacing(p, 1, 1)
     return t
 
@@ -251,13 +280,28 @@ def build(blocks, units, doc):
         qn_ = 0
 
         grouped = book.render.group(blocks, s, e)
+
+        def translation(at):
+            """Every Kurdish block following `at`, and no more.
+
+            A paragraph's translation is exactly the Kurdish that follows it:
+            stopping at the first block would drop the rest of the same
+            translation, and running on would absorb the next one."""
+            got, j = [], at + 1
+            while j < len(grouped) and grouped[j]['kind'] == 'kurdish' \
+                    and not grouped[j].get('images'):
+                got.append(grouped[j]['text'])
+                j += 1
+            return got, j - at - 1
+
         i = 0
         while i < len(grouped):
             b = grouped[i]
             k = b['kind']
             t = b.get('text', '')
             nxt = grouped[i + 1] if i + 1 < len(grouped) else None
-            ku = nxt['text'] if (nxt and nxt['kind'] == 'kurdish') else None
+            ku_all, ku_n = translation(i)
+            ku = ku_all[0] if ku_all else None
 
             if k == 'unit' or (k == 'blank' and not b.get('images')):
                 i += 1
@@ -297,10 +341,10 @@ def build(blocks, units, doc):
                         c = tb.cell(ri, ci)
                         p = c.paragraphs[0]
                         is_ku = bool(re.search(r'[؀-ۿ]', val))
-                        run(p, val, KU if is_ku else EN, 9,
-                            bold=(ri == 0),
-                            color=RGBColor(0xFF, 0xFF, 0xFF) if ri == 0
-                            else (KU_C if is_ku else None))
+                        rich(p, val, 'ku' if is_ku else 'en', 9,
+                             bold=(ri == 0),
+                             color=RGBColor(0xFF, 0xFF, 0xFF) if ri == 0
+                             else (KU_C if is_ku else None))
                         if is_ku:
                             rtl(p)
                         spacing(p, 1, 1)
@@ -339,7 +383,7 @@ def build(blocks, units, doc):
                             pp.alignment = WD_ALIGN_PARAGRAPH.CENTER
                             run(pp, line, EN_SANS, 9.5, bold=True,
                                 color=RGBColor(0xFF, 0xFF, 0xFF) if first
-                                else INK)
+                                else SUN)
                             spacing(pp, 1, 1)
                         cell_shade(c, '12203A' if first else 'FFFFFF')
                         borders(c._tc.get_or_add_tcPr(),
@@ -355,13 +399,14 @@ def build(blocks, units, doc):
                 p = cellpar(c)
                 run(p, 'T.B  ', EN_SANS, 7.5, bold=True, color=RGBColor(0xA4, 0x64, 0x0B))
                 is_ku = b.get('script') == 'ku'
-                run(p, t2, KU if is_ku else EN, 10 if is_ku else 9.5, color=TBC)
+                rich(p, t2, 'ku' if is_ku else 'en',
+                     10 if is_ku else 9.5, color=TBC)
                 if is_ku:
                     rtl(p)
                 spacing(p, 1, 1)
-                if ku:
-                    add_ku(c, ku, 10, TBC)
-                    i += 1
+                for x in ku_all:
+                    add_ku(c, x, 10, TBC)
+                i += ku_n
                 doc.add_paragraph()
                 i += 1
                 continue
@@ -373,8 +418,8 @@ def build(blocks, units, doc):
                 run(p, 'EXAMPLE', EN_SANS, 6.5, bold=True, color=SUN)
                 spacing(p, 1, 1)
                 p2 = c.add_paragraph()
-                run(p2, body, EN, 9.5, italic=True,
-                    color=RGBColor(0x5A, 0x32, 0x12))
+                rich(p2, body, 'en', 9.5, italic=True,
+                     color=RGBColor(0x5A, 0x32, 0x12))
                 spacing(p2, 0, 1)
                 doc.add_paragraph()
                 i += 1
@@ -389,6 +434,7 @@ def build(blocks, units, doc):
                 run(p, 'بانکی پرسیار', KU_DISP, 10.5, bold=True,
                     color=RGBColor(0xFF, 0xD9, 0xA8))
                 spacing(p, 2, 2)
+                keep_next(p)
                 doc.add_paragraph()
                 i += 1
                 continue
@@ -396,17 +442,20 @@ def build(blocks, units, doc):
             if k in ('heading', 'boxed'):
                 p = add_en(doc, t, 14, bold=True, color=INK, font=EN_SANS)
                 spacing(p, 10, 3)
+                keep_next(p)
                 i += 1
                 continue
 
             if k == 'subheading':
                 is_ku = b.get('script') == 'ku'
                 p = doc.add_paragraph()
-                run(p, t, KU_DISP if is_ku else EN_SANS, 11, bold=True, color=INK)
+                rich(p, t, 'ku' if is_ku else 'en', 11, bold=True, color=INK,
+                     ku_font=KU_DISP, en_font=EN_SANS)
                 if is_ku:
                     rtl(p)
                 borders(p._p.get_or_add_pPr(), bottom=(4, 'E7E2DA'))
                 spacing(p, 6, 2)
+                keep_next(p)
                 i += 1
                 continue
 
@@ -437,13 +486,13 @@ def build(blocks, units, doc):
                 p = cellpar(c)
                 run(p, f'{qn_}.  ', EN_SANS, 9.5, bold=True,
                     color=RGBColor(0x1B, 0x5F, 0xA8))
-                run(p, lead or 'Choose the correct answer', EN_SANS, 10,
-                    bold=True, color=INK)
+                rich(p, lead or 'Choose the correct answer', 'en', 10,
+                     bold=True, color=INK, en_font=EN_SANS)
                 spacing(p, 1, 2)
                 add_mcq(c, opts)
-                if ku:
-                    add_ku(c, ku, 10)
-                    i += 1
+                for x in ku_all:
+                    add_ku(c, x, 10)
+                i += ku_n
                 doc.add_paragraph()
                 i += 1
                 continue
@@ -455,20 +504,19 @@ def build(blocks, units, doc):
                 p = cellpar(c)
                 run(p, f'{qn_}.  ', EN_SANS, 9.5, bold=True,
                     color=RGBColor(0x1B, 0x5F, 0xA8))
-                run(p, t, EN_SANS, 10, bold=True, color=INK)
+                rich(p, t, 'en', 10, bold=True, color=INK, en_font=EN_SANS)
                 spacing(p, 1, 2)
                 if nxt and nxt['kind'] == 'answer':
                     pa = c.add_paragraph()
                     run(pa, '✓  ', EN_SANS, 9, bold=True, color=ANS)
-                    run(pa, nxt['text'], EN, 9.5, bold=True, color=ANS)
+                    rich(pa, nxt['text'], 'en', 9.5, bold=True, color=ANS)
                     shade(pa._p.get_or_add_pPr(), 'EDF7F4')
                     spacing(pa, 1, 1)
                     i += 1
-                    nxt = grouped[i + 1] if i + 1 < len(grouped) else None
-                    ku = nxt['text'] if (nxt and nxt['kind'] == 'kurdish') else None
-                if ku:
-                    add_ku(c, ku, 10)
-                    i += 1
+                    ku_all, ku_n = translation(i)
+                for x in ku_all:
+                    add_ku(c, x, 10)
+                i += ku_n
                 doc.add_paragraph()
                 i += 1
                 continue
@@ -486,19 +534,22 @@ def build(blocks, units, doc):
                          r'answer|fill|write|underline|question)\b', t, re.I)
             if k == 'answer' and is_prompt and len(t) < 70:
                 p = doc.add_paragraph()
-                run(p, t.rstrip(' -:'), EN_SANS, 9.5, bold=True, color=SUN)
+                rich(p, t.rstrip(' -:'), 'en', 9.5, bold=True, color=SUN,
+                     en_font=EN_SANS)
                 borders(p._p.get_or_add_pPr(), bottom=(4, 'E7E2DA'))
                 spacing(p, 5, 2)
+                keep_next(p)
             elif k == 'answer' and red and len(t) > 25:
                 p = doc.add_paragraph()
                 run(p, '✓  ', EN_SANS, 9, bold=True, color=ANS)
-                run(p, t, EN, 9.5, bold=True, color=ANS)
+                rich(p, t, 'en', 9.5, bold=True, color=ANS)
                 shade(p._p.get_or_add_pPr(), 'EDF7F4')
                 spacing(p, 2, 2)
-            elif ku:
+            elif ku_all:
                 add_en(doc, t)
-                add_ku(doc, ku)
-                i += 1
+                for x in ku_all:
+                    add_ku(doc, x)
+                i += ku_n
             else:
                 add_en(doc, t)
             i += 1

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Turn the classified blocks into the designed HTML book."""
 import json, re, os, html, sys, math
+from mixed import segments
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -25,9 +26,6 @@ FORMULA_HINT = re.compile(
     r'(\+\s*v\s*\(|\bV\s*\(base\)|\bSubject\b.*\+|\bcomp…|\bcomp\.\.\.)', re.I)
 
 
-LATIN_RUN = re.compile(r'[A-Za-z][A-Za-z0-9 ,.\'’/&:_-]*[A-Za-z0-9.]|[A-Za-z]')
-
-
 RAYS = ''.join(
     f'<line x1="50" y1="100" x2="{50 + 78 * math.cos(math.radians(a)):.2f}"'
     f' y2="{100 - 78 * math.sin(math.radians(a)):.2f}"'
@@ -39,10 +37,26 @@ def esc(s):
     return html.escape(s, quote=False)
 
 
+def mix(text, host):
+    """Escape text, giving every run the font of its own script.
+
+    `host` is the script of the surrounding paragraph; a run in the other
+    script - its brackets included - is wrapped so it takes its own font and
+    keeps its own direction.
+    """
+    out = []
+    for sc, chunk in segments(text):
+        e = html.escape(chunk, quote=False)
+        out.append(e if sc == host else f'<bdi class="x-{sc}">{e}</bdi>')
+    return ''.join(out)
+
+
 def esc_ku(s):
-    """Escape Kurdish text, isolating embedded Latin so bidi stays sane."""
-    return LATIN_RUN.sub(lambda m: f'<bdi>{html.escape(m.group(0), quote=False)}</bdi>',
-                         html.escape(s, quote=False))
+    return mix(s, 'ku')
+
+
+def esc_en(s):
+    return mix(s, 'en')
 
 
 def is_ku(b):
@@ -257,12 +271,27 @@ def render_range(blocks, start, end, unit_word, unit_no):
 
     blocks = group(blocks, start, end)
     start, end = 0, len(blocks)
+
+    def translation(at):
+        """Every Kurdish block that follows position `at`, and no more.
+
+        A paragraph's translation is whatever Kurdish immediately follows it;
+        taking only the first block would drop the rest of the same
+        translation, and reaching further would pull in the next one."""
+        out_, j = [], at + 1
+        while j < end and blocks[j]['kind'] == 'kurdish' \
+                and not blocks[j].get('images'):
+            out_.append(blocks[j]['text'])
+            j += 1
+        return out_, j - at - 1
+
     i, qn = start, 0
     while i < end:
         b = blocks[i]
         k, t = b['kind'], b.get('text', '')
         nxt = blocks[i + 1] if i + 1 < end else None
-        ku = nxt['text'] if (nxt and nxt['kind'] == 'kurdish') else None
+        ku_all, ku_n = translation(i)
+        ku = '\n'.join(ku_all) if ku_all else None
 
         if k == 'unit':
             i += 1
@@ -271,7 +300,7 @@ def render_range(blocks, start, end, unit_word, unit_no):
         if b.get('images'):
             out.append(img_html(b['images'], t if len(t) < 90 else ''))
             if len(t) >= 90:
-                out.append(f'<p class="en plain">{esc(t)}</p>')
+                out.append(f'<p class="en plain">{esc_en(t)}</p>')
             i += 1
             continue
 
@@ -303,8 +332,9 @@ def render_range(blocks, start, end, unit_word, unit_no):
             t = re.sub(r'^\s*T\.?\s*B\s*\d*\s*[:/]?\s*', '', t, flags=re.I)
             body = f'<p class="{"ku" if is_ku(b) else "en"} plain">{esc_ku(t) if is_ku(b) else esc(t)}</p>'
             if ku:
-                body += f'<p class="ku plain">{esc_ku(ku)}</p>'
-                i += 1
+                body += ''.join(f'<p class="ku plain">{esc_ku(x)}</p>'
+                                for x in ku_all)
+                i += ku_n
             out.append(f'<div class="tb">{body}</div>')
             i += 1
             continue
@@ -357,13 +387,12 @@ def render_range(blocks, start, end, unit_word, unit_no):
                         f'<span>{esc(lead)}</span></p>' if lead else
                         f'<p class="q"><span class="n">{qn}</span>'
                         f'<span>Choose the correct answer</span></p>')
-                kub = f'<p class="ku">{esc_ku(ku)}</p>' if ku else ''
-                if ku:
-                    i += 1
+                kub = ''.join(f'<p class="ku">{esc_ku(x)}</p>' for x in ku_all)
+                i += ku_n
                 out.append(f'<div class="qa">{head}'
                            f'<div class="mcq {wide}">{items}</div>{kub}</div>')
             else:
-                out.append(f'<p class="en plain">{esc(t)}</p>')
+                out.append(f'<p class="en plain">{esc_en(t)}</p>')
             i += 1
             continue
 
@@ -373,11 +402,9 @@ def render_range(blocks, start, end, unit_word, unit_no):
             if nxt and nxt['kind'] == 'answer':
                 ans = f'<p class="a">{esc(nxt["text"])}</p>'
                 i += 1
-                nxt = blocks[i + 1] if i + 1 < end else None
-                ku = nxt['text'] if (nxt and nxt['kind'] == 'kurdish') else None
-            kub = f'<p class="ku">{esc_ku(ku)}</p>' if ku else ''
-            if ku:
-                i += 1
+                ku_all, ku_n = translation(i)
+            kub = ''.join(f'<p class="ku">{esc_ku(x)}</p>' for x in ku_all)
+            i += ku_n
             out.append(f'<div class="qa"><p class="q"><span class="n">{qn}</span>'
                        f'<span>{esc(t)}</span></p>{ans}{kub}</div>')
             i += 1
@@ -391,11 +418,11 @@ def render_range(blocks, start, end, unit_word, unit_no):
         # text / answer, optionally paired with its Kurdish translation
         cls = 'a' if k == 'answer' else 'en'
         if ku:
-            out.append(f'<div class="pair"><p class="en">{esc(t)}</p>'
+            out.append(f'<div class="pair"><p class="en">{esc_en(t)}</p>'
                        f'<p class="ku">{esc(ku)}</p></div>')
             i += 2
         else:
-            tag = f'<p class="en plain">{esc(t)}</p>'
+            tag = f'<p class="en plain">{esc_en(t)}</p>'
             red = any((r.get('color') or '') in ('C00000', 'FF0000', 'E36C0A')
                       for r in b.get('runs', []))
             is_prompt = bool(re.search(r'(:-|:|-|…|\.{3,}|_{3,})\s*$', t)) or \
@@ -408,7 +435,29 @@ def render_range(blocks, start, end, unit_word, unit_no):
             out.append(tag)
             i += 1
 
-    return '\n'.join(out)
+    return '\n'.join(keep_with_next(out))
+
+
+KEEPS = ('<h2 class="sec"', '<h3 class="sub', '<p class="prompt"',
+         '<div class="bank"')
+
+
+def keep_with_next(parts):
+    """Bind each heading to the block under it.
+
+    A heading that lands at the foot of a page leaves its topic orphaned, so
+    heading and first block travel together to the next page instead.
+    """
+    out, i = [], 0
+    while i < len(parts):
+        p = parts[i]
+        if p.startswith(KEEPS) and i + 1 < len(parts):
+            out.append(f'<div class="keep">{p}\n{parts[i + 1]}</div>')
+            i += 2
+        else:
+            out.append(p)
+            i += 1
+    return out
 
 
 def page(body, title):

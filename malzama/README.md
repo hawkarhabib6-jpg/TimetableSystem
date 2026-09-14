@@ -36,6 +36,22 @@ The grammar patterns are the one place the layout improves on the source: the
 original scattered each alternative across separate one-line paragraphs, which
 `tools/render.py` regroups into a single diagram.
 
+## Mixed Kurdish and English
+
+Brackets and punctuation carry no script of their own, so `tools/mixed.py`
+assigns each one deliberately - an opening bracket goes with what it opens, a
+closing bracket with what it closes - and both outputs then set a font per run.
+`(base)` inside a Kurdish sentence keeps English brackets in the English face;
+`(کۆما)` keeps Kurdish brackets in the Kurdish face.
+
+Two further rules hold in both outputs:
+
+- A heading travels with the block beneath it (`.keep` in print, `w:keepNext`
+  in Word), so a new topic never starts on the last line of a page.
+- A paragraph's translation is exactly the Kurdish that follows it. Taking only
+  the first block would drop the rest of the same translation; running past it
+  would absorb the next paragraph's.
+
 ## Output
 
 Both deliverables come from the same source and the same stylesheet:

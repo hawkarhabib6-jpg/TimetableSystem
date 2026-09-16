@@ -1,0 +1,181 @@
+/* ============================================================
+   مەلزەمەی بیرکاری — ڕێژە سێگۆشەییەکان
+   A4 print system. Kurdish RTL prose, left-to-right mathematics.
+   ============================================================ */
+:root{
+  --ink:        #17233A;
+  --ink-soft:   #47566E;
+  --ink-faint:  #8190A6;
+  --paper:      #FFFFFF;
+  --rule:       #E3E6EC;
+  --rule-soft:  #F0F2F6;
+
+  --key:        #1F5F8B;   /* structure: headings, numbering */
+  --key-wash:   #EEF5FA;
+  --law:        #8A5A00;   /* laws and formulas */
+  --law-wash:   #FFF8E8;
+  --good:       #176B57;   /* answers */
+  --good-wash:  #EDF6F3;
+  --warn:       #A33A2E;   /* common mistakes */
+  --warn-wash:  #FDF0EE;
+
+  --ku:   'Noto Naskh Arabic','Noto Sans Arabic',serif;
+  --kud:  'Noto Kufi Arabic','Noto Naskh Arabic',sans-serif;
+  --en:   'Inter',system-ui,sans-serif;
+}
+
+@page{ size:A4; margin:18mm 16mm 16mm 16mm; }
+@page bleed{ size:A4; margin:0; }
+
+*{ box-sizing:border-box; }
+html{ -webkit-print-color-adjust:exact; print-color-adjust:exact;
+      background:var(--paper); }
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--ku); direction:rtl;
+  font-size:11.4pt; line-height:1.95;
+}
+
+/* ---------- chapter ---------- */
+.chapter{ break-before:page; }
+.chapter:first-of-type{ break-before:auto; }
+.chead{
+  display:flex; align-items:baseline; gap:4mm;
+  border-bottom:1.6pt solid var(--key); padding-bottom:3mm; margin:0 0 7mm;
+  break-after:avoid;
+}
+.chead .cnum{
+  font-family:var(--en); font-weight:800; font-size:20pt; color:var(--key);
+  line-height:1;
+}
+.chead h2{
+  font-family:var(--kud); font-weight:700; font-size:17pt; margin:0;
+  color:var(--ink); flex:1;
+}
+.chead .cen{
+  font-family:var(--en); font-size:9.6pt; color:var(--ink-faint);
+  margin:0; direction:ltr; letter-spacing:.04em;
+}
+
+h3.sec{
+  font-family:var(--kud); font-weight:700; font-size:13pt; color:var(--key);
+  margin:8mm 0 3mm; padding-bottom:1.6mm;
+  border-bottom:.8pt solid var(--rule); break-after:avoid;
+}
+
+/* ---------- prose ---------- */
+p{ margin:0 0 3mm; }
+.ku{ text-align:justify; }
+.concept{
+  background:var(--key-wash); border-right:2.6pt solid var(--key);
+  border-radius:2pt 0 0 2pt; padding:3.5mm 4.5mm; margin:0 0 5mm;
+  text-align:justify;
+}
+
+.bullets{ margin:0 0 4mm; padding:0 6mm 0 0; }
+.bullets li{ margin:0 0 1.8mm; }
+.bullets.plain{ list-style:none; padding-right:0; }
+.bullets.plain li{
+  position:relative; padding-right:6mm;
+}
+.bullets.plain li::before{
+  content:''; position:absolute; right:1.8mm; top:3.2mm;
+  width:1.8mm; height:1.8mm; border-radius:50%; background:var(--key);
+}
+
+/* ---------- law box ---------- */
+.law{
+  break-inside:avoid; margin:5mm 0 6mm; padding:4mm 5mm;
+  background:var(--law-wash); border:1pt solid #EBD9AE; border-radius:3pt;
+}
+.law-title{
+  font-family:var(--kud); font-weight:700; font-size:10.6pt;
+  color:var(--law); margin:0 0 2.5mm;
+}
+.law-line{ margin:2mm 0; }
+.law-note{
+  font-size:10pt; color:var(--ink-soft); margin:2.5mm 0 0;
+  padding-top:2.5mm; border-top:.6pt dashed #EBD9AE;
+}
+
+/* ---------- worked example ---------- */
+.example{
+  break-inside:avoid; margin:6mm 0; padding:0 0 4mm;
+  border:.8pt solid var(--rule); border-radius:3pt; overflow:hidden;
+  background:#fff;
+}
+.example > header{
+  background:var(--key-wash); padding:3mm 4.5mm; margin:0 0 4mm;
+  border-bottom:.8pt solid #DCE8F1;
+}
+.example .badge{
+  display:inline-block; font-family:var(--kud); font-weight:700;
+  font-size:8.6pt; color:#fff; background:var(--key);
+  border-radius:20pt; padding:1.1mm 3.6mm; margin-bottom:2mm;
+}
+.example .prompt{ margin:0; text-align:justify; }
+.example > *:not(header){ margin-right:4.5mm; margin-left:4.5mm; }
+
+.dia{ margin:0 0 4mm; text-align:center; }
+.dia img{ max-width:74mm; max-height:52mm; }
+
+/* ---------- steps ---------- */
+.steps{ list-style:none; margin:0 0 3mm; padding:0; counter-reset:s; }
+.steps .step{
+  display:flex; gap:3.2mm; align-items:flex-start;
+  padding:2.4mm 0; border-top:.6pt solid var(--rule-soft);
+  break-inside:avoid;
+}
+.steps .step:first-child{ border-top:0; }
+.steps .n{
+  flex:none; width:5.6mm; height:5.6mm; border-radius:50%;
+  background:var(--key); color:#fff; font-family:var(--en);
+  font-weight:700; font-size:7.6pt; margin-top:1.4mm;
+  display:inline-flex; align-items:center; justify-content:center;
+}
+.steps .body{ flex:1; min-width:0; }
+.steps .why{ margin:0 0 1.2mm; font-size:10.6pt; color:var(--ink-soft); }
+
+.answer{
+  background:var(--good-wash); border-right:2.4pt solid var(--good);
+  border-radius:2pt 0 0 2pt; padding:2.4mm 4mm; margin:3mm 0 0;
+  font-weight:700; color:var(--good);
+}
+
+/* ---------- notes ---------- */
+.pitfall, .tip{
+  break-inside:avoid; margin:5mm 0; padding:3.5mm 4.5mm; border-radius:3pt;
+}
+.pitfall{ background:var(--warn-wash); border-right:2.6pt solid var(--warn); }
+.tip{ background:var(--good-wash); border-right:2.6pt solid var(--good); }
+.pitfall h4, .tip h4{
+  font-family:var(--kud); font-weight:700; font-size:10.4pt; margin:0 0 2mm;
+}
+.pitfall h4{ color:var(--warn); }
+.tip h4{ color:var(--good); }
+.pitfall ul, .tip ul{ margin:0; padding:0 5mm 0 0; }
+.pitfall li, .tip li{ margin:0 0 1.6mm; font-size:10.6pt; }
+
+/* ---------- tables ---------- */
+table.grid{
+  width:100%; border-collapse:separate; border-spacing:0;
+  margin:4mm 0 5mm; font-size:10.4pt; break-inside:avoid;
+  border:.8pt solid var(--rule); border-radius:3pt; overflow:hidden;
+}
+table.grid th{
+  background:var(--key); color:#fff; font-family:var(--kud);
+  font-weight:700; font-size:9.6pt; padding:2.4mm 3mm; text-align:right;
+}
+table.grid td{
+  padding:2.4mm 3mm; border-top:.6pt solid var(--rule-soft);
+  vertical-align:middle; text-align:right;
+}
+table.grid tbody tr:nth-child(even) td{ background:#FAFBFD; }
+table.grid td.c, table.grid th.c{ text-align:center; }
+
+/* ---------- mathematics ---------- */
+.katex{ direction:ltr; unicode-bidi:isolate; font-size:1.02em; }
+.k-block{ display:block; text-align:center; margin:2.4mm 0; }
+.k-block .katex-display{ margin:0; }
+.k-inline{ display:inline-block; vertical-align:middle; }
+.math-error{ color:var(--warn); font-family:monospace; }

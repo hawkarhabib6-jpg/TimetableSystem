@@ -21,10 +21,30 @@ def _text_of(el):
     return ''.join(t.text or '' for t in el.iter(_q('t')))
 
 
+def _is_one_group(s):
+    """True when the outermost braces enclose the whole string.
+
+    "{y}_{2}-{y}_{1}" also starts and ends with a brace, but its first
+    group closes early; treating it as one group produced a fraction whose
+    numerator was only "y".
+    """
+    if not (s.startswith('{') and s.endswith('}')):
+        return False
+    depth = 0
+    for i, ch in enumerate(s):
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                return i == len(s) - 1
+    return False
+
+
 def _wrap(s):
-    """Brace a LaTeX group unless it is already a single token."""
+    """Brace a LaTeX group unless it already is exactly one."""
     s = s.strip()
-    if len(s) == 1 or (s.startswith('{') and s.endswith('}')):
+    if len(s) == 1 or _is_one_group(s):
         return s if s.startswith('{') else '{' + s + '}'
     return '{' + s + '}'
 

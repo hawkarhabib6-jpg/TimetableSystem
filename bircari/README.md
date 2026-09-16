@@ -1,6 +1,33 @@
-# مەلزەمەی بیرکاری — ڕێژە سێگۆشەییەکان
+# مەلزەمەی بیرکاری — بەشەکانی ٥، ٦ و ٧
 
-Rebuilds the trigonometry booklet from the source .docx as an academic text.
+Rebuilds three maths booklets from their source .docx files as academic texts:
+trigonometry, the derivative, and vectors.
+
+    tools/make_all.py  →  build/Bircari-Bashi-5.docx   72 pages
+                          build/Bircari-Bashi-6.docx   29 pages
+                          build/Bircari-Bashi-7.docx   83 pages
+
+`src/`, `src6/` and `src7/` hold the three sources; `tools/harvest.py` reads
+every worked solution out of them, `tools/steps.py` gives each step of each
+solution its reason, and `tools/scaffold.py` carries the teaching written
+around them - the concept, the laws, the common mistakes and the shortcuts.
+
+## Every worked example, not a selection
+
+The three sources hold 297 worked solutions between them. They are laid out
+as table cells and as runs of consecutive equations, so `harvest.py` collects
+both shapes, and all 297 are in the booklets. A cell that holds only a
+definition - "sin", "tan", or the letters of a general rule - reads back like
+a two-step solution, so `harvest.worked()` requires a chain to show some
+working before it counts as an example.
+
+## The questions are text
+
+The original typist pasted every question as a picture of itself. 175 of them
+were read off the image and written out in `tools/prompts.py`, Kurdish as
+Kurdish and the maths as LaTeX, so the questions can be searched, resized and
+corrected like the rest of the booklet. `harvest.diagrams()` then knows those
+pictures are questions, not figures, and leaves them out of the page.
 
 ## Pipeline
 
@@ -49,4 +76,7 @@ carried a diagram belonging to a different problem; those were replaced.
 
 ## Build
 
-    cd tools && python3 write.py
+    cd tools && python3 extract.py && python3 make_all.py
+
+`write.py` builds the older single-part booklet; `make_all.py` builds all
+three.

@@ -17,10 +17,14 @@ GREEK = {
     'omega': 'ω', 'Delta': 'Δ', 'Theta': 'Θ', 'Sigma': 'Σ', 'Omega': 'Ω',
 }
 SYMBOL = {
+    'langle': '⟨', 'rangle': '⟩', 'perp': '⊥', 'cdot': '·',
+    'Longleftrightarrow': '⟺', 'Longrightarrow': '⟹',
+    'iff': '⟺', 'implies': '⟹', 'prime': '′',
     'times': '×', 'div': '÷', 'pm': '±', 'mp': '∓', 'cdot': '·',
     'approx': '≈', 'neq': '≠', 'ne': '≠', 'leq': '≤', 'le': '≤',
-    'geq': '≥', 'ge': '≥', 'ldots': '…', 'dots': '…', 'infty': '∞',
+    'geq': '≥', 'ge': '≥', 'ldots': '…', 'dots': '…', 'cdots': '⋯', 'infty': '∞',
     'Rightarrow': '⇒', 'rightarrow': '→', 'to': '→', 'circ': '°',
+    'Leftrightarrow': '⇔', 'leftrightarrow': '↔',
     'therefore': '∴', 'because': '∵', 'angle': '∠', 'triangle': '△',
     'perp': '⊥', 'parallel': '∥', 'in': '∈', 'notin': '∉',
 }
@@ -87,6 +91,25 @@ def _rad(body, deg=None):
         pr = '<m:radPr><m:ctrlPr/></m:radPr>'
         deg = f'<m:deg>{deg}</m:deg>'
     return f'<m:rad xmlns:m="{M}">{pr}{deg}<m:e>{body}</m:e></m:rad>'
+
+
+def _acc(body, chr_='\u0302'):
+    """An accent - a hat over an angle name, an arrow over a vector."""
+    return (f'<m:acc xmlns:m="{M}"><m:accPr>'
+            f'<m:chr m:val="{chr_}"/><m:ctrlPr/></m:accPr>'
+            f'<m:e>{body}</m:e></m:acc>')
+
+
+def _matrix(rows):
+    cols = max(len(r) for r in rows) if rows else 1
+    pr = (f'<m:mPr><m:mcs><m:mc><m:mcPr>'
+          f'<m:count m:val="{cols}"/>'
+          f'<m:mcJc m:val="center"/></m:mcPr></m:mc></m:mcs>'
+          f'<m:ctrlPr/></m:mPr>')
+    body = ''
+    for r in rows:
+        body += '<m:mr>' + ''.join(f'<m:e>{c}</m:e>' for c in r) + '</m:mr>'
+    return f'<m:m xmlns:m="{M}">{pr}{body}</m:m>'
 
 
 def _delim(body, beg='(', end=')'):
@@ -205,6 +228,42 @@ class Parser:
             beg = {'.': '', r'\{': '{'}.get(beg, beg)
             end = {'.': '', r'\}': '}'}.get(end, end)
             return _delim(Parser(body).run(), beg, end)
+
+        if name in ('hat', 'widehat'):
+            return _acc(self.group(), '\u0302')
+
+        if name in ('vec', 'overrightarrow'):
+            return _acc(self.group(), '\u20d7')
+
+        if name in ('bar', 'overline'):
+            return _acc(self.group(), '\u00af')
+
+        if name == 'begin':
+            kind = re.sub(r'<[^>]+>', '', self.group())
+            rows, row, cell = [], [], []
+            while True:
+                tok = self.peek()
+                if tok is None:
+                    raise LatexError(r'\begin with no \end')
+                if tok == '\\end':
+                    self.next()
+                    self.group()
+                    break
+                if tok == '\\\\':
+                    self.next()
+                    row.append(Parser(cell).run())
+                    rows.append(row)
+                    row, cell = [], []
+                    continue
+                if tok == '&':
+                    self.next()
+                    row.append(Parser(cell).run())
+                    cell = []
+                    continue
+                cell.append(self.next())
+            row.append(Parser(cell).run())
+            rows.append(row)
+            return _matrix(rows)
 
         if name in FUNCS:
             return _r(name, style='p')

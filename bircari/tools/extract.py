@@ -16,15 +16,20 @@ R = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-SRC = os.path.join(ROOT, 'src', 'document.xml')
-RELS = os.path.join(ROOT, 'src', 'document.xml.rels')
-OUT = os.path.join(ROOT, 'build', 'source.json')
+
+# One unpacked .docx per part. Images are namespaced by part, since the
+# three documents all number theirs from image1.png.
+PARTS = {
+    '5': 'src',
+    '6': 'src6',
+    '7': 'src7',
+}
 
 
-def rel_map():
+def rel_map(rels):
     m = {}
-    if os.path.exists(RELS):
-        for r in etree.parse(RELS).getroot():
+    if os.path.exists(rels):
+        for r in etree.parse(rels).getroot():
             if 'image' in (r.get('Type') or ''):
                 m[r.get('Id')] = os.path.basename(r.get('Target'))
     return m
@@ -64,29 +69,50 @@ def flat(parts):
     return ''.join(p.get('text') or ('$' + p['math'] + '$') for p in parts)
 
 
-def main():
-    rels = rel_map()
-    body = etree.parse(SRC).getroot().find(W + 'body')
+def read_part(part, folder):
+    base = os.path.join(ROOT, folder)
+    doc = os.path.join(base, 'word', 'document.xml')
+    if not os.path.exists(doc):                       # part 5 was unpacked flat
+        doc = os.path.join(base, 'document.xml')
+        rels = os.path.join(base, 'document.xml.rels')
+    else:
+        rels = os.path.join(base, 'word', '_rels', 'document.xml.rels')
+    if not os.path.exists(doc):
+        return []
+    rmap = rel_map(rels)
+    body = etree.parse(doc).getroot().find(W + 'body')
     blocks = []
     for el in body.iterchildren():
         if el.tag == W + 'p':
-            parts, imgs = inline(el, rels)
+            parts, imgs = inline(el, rmap)
             if parts or imgs:
-                blocks.append({'kind': 'p', 'parts': parts, 'images': imgs,
+                blocks.append({'kind': 'p', 'part': part, 'parts': parts,
+                               'images': [f'{part}/{i}' for i in imgs],
                                'flat': flat(parts)})
         elif el.tag == W + 'tbl':
             rows = []
             for tr in el.findall(W + 'tr'):
                 row = []
                 for tc in tr.findall(W + 'tc'):
-                    parts, imgs = inline(tc, rels)
-                    row.append({'parts': parts, 'images': imgs,
+                    parts, imgs = inline(tc, rmap)
+                    row.append({'parts': parts,
+                                'images': [f'{part}/{i}' for i in imgs],
                                 'flat': flat(parts)})
                 rows.append(row)
-            blocks.append({'kind': 'tbl', 'rows': rows})
+            blocks.append({'kind': 'tbl', 'part': part, 'rows': rows})
+    return blocks
 
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    json.dump(blocks, open(OUT, 'w', encoding='utf8'),
+
+def main():
+    blocks = []
+    for part, folder in sorted(PARTS.items()):
+        got = read_part(part, folder)
+        print(f'  part {part}: {len(got)} blocks')
+        blocks.extend(got)
+
+    out = os.path.join(ROOT, 'build', 'source.json')
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    json.dump(blocks, open(out, 'w', encoding='utf8'),
               ensure_ascii=False, indent=1)
 
     eq = sum(1 for b in blocks if b['kind'] == 'p'

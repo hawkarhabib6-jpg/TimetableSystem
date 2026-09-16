@@ -112,8 +112,14 @@ def spacing(par, before=0, after=4, line=None):
         pf.line_spacing = line
 
 
+# Every equation in the booklet is set in western digits. Prose that counts
+# in Arabic-Indic ones beside them reads as a different number system on the
+# same page, so the two are brought together here, in one place.
+WESTERN = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+
+
 def run(par, text, font=KU, size=11, bold=False, italic=False, color=None):
-    r = par.add_run(text)
+    r = par.add_run(text.translate(WESTERN))
     r.font.size = Pt(size)
     r.bold, r.italic = bold, italic
     if color is not None:
@@ -140,9 +146,14 @@ def cellpar(cell):
     return cell.add_paragraph()
 
 
-def onecell(doc, fill=None, right=None, edge=None):
+def onecell(doc, fill=None, right=None, edge=None, keep=False):
     t = doc.add_table(rows=1, cols=1)
     t.alignment = WD_TABLE_ALIGNMENT.CENTER
+    if keep:
+        # A worked example is one row. Splitting it leaves its number on one
+        # page and its working on the next.
+        trPr = t.rows[0]._tr.get_or_add_trPr()
+        trPr.append(OxmlElement('w:cantSplit'))
     c = t.cell(0, 0)
     c.paragraphs[0].text = ''
     if fill:
@@ -237,7 +248,7 @@ def law(doc, title, lines, note=None):
 
 
 def example(doc, no, prompt_parts, figure=None, steps=(), answer=None):
-    _, c = onecell(doc, 'FFFFFF', edge=(6, HEX_RULE))
+    _, c = onecell(doc, 'FFFFFF', edge=(6, HEX_RULE), keep=True)
 
     head = cellpar(c)
     run(head, f'نموونە {no}', KUD, 9.5, bold=True, color=WHITE)
@@ -245,14 +256,21 @@ def example(doc, no, prompt_parts, figure=None, steps=(), answer=None):
     rtl(head)
     spacing(head, 1, 2)
 
-    p = c.add_paragraph()
-    for piece in prompt_parts:
-        if piece.startswith('$') and piece.endswith('$'):
-            math(p, piece[1:-1])
+    if prompt_parts:
+        p = c.add_paragraph()
+        # A question that is only an equation sits centred, like the working
+        # below it; one with words in it reads from the right.
+        bare = all(x.startswith('$') and x.endswith('$') for x in prompt_parts)
+        for piece in prompt_parts:
+            if piece.startswith('$') and piece.endswith('$'):
+                math(p, piece[1:-1])
+            else:
+                run(p, piece, KU, 11)
+        if bare:
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         else:
-            run(p, piece, KU, 11)
-    rtl(p)
-    spacing(p, 1, 3, 1.4)
+            rtl(p)
+        spacing(p, 1, 3, 1.4)
 
     if figure:
         f = c.add_paragraph()

@@ -31,6 +31,22 @@ notation:
 This is also what lets an equation be pasted into Word or InDesign without
 its symbols reordering.
 
+## Output
+
+`build/Bircari-Trigonometry.docx` — editable Word. Its 161 equations are real
+Word maths built by `tools/latex2omml.py`, not pictures, so the reader can
+click into one and change it.
+
+`latex2omml.py` supports only the constructs the booklet actually writes and
+raises on anything else, so an equation cannot render silently wrong.
+
+## Figures
+
+Several source pictures bundle a question banner above the triangle. The
+prompt is re-typed in the booklet, so `tools/figs.py` trims the banner rather
+than printing it twice in two different styles. A few examples in the source
+carried a diagram belonging to a different problem; those were replaced.
+
 ## Build
 
-    tools/build.sh
+    cd tools && python3 write.py

@@ -12,7 +12,9 @@ AppPublisher=TimetableSystem
 ; و بەرنامەکە دەتوانێت لە فۆڵدەری خۆیدا بنووسێت (بنکەی زانیاری، فایلی کاتی)
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
-DefaultDirName={autopf}\TimetableSystem
+; PHP Desktop ناتوانێت PHP بکاتەوە ئەگەر ڕێڕەوەکە بۆشایی (space)ی تێدابێت،
+; بۆ نموونە C:\Users\Ahmad Ali\... ، بۆیە ڕێڕەوێکی بێ بۆشایی بەکاردەهێنین
+DefaultDirName={sd}\TimetableSystem
 DefaultGroupName=TimetableSystem
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\TimetableSystem.exe
@@ -35,3 +37,14 @@ Name: "{autodesktop}\School Timetable"; Filename: "{app}\TimetableSystem.exe"
 
 [Run]
 Filename: "{app}\TimetableSystem.exe"; Description: "Launch"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if (CurPageID = wpSelectDir) and (Pos(' ', WizardDirValue) > 0) then
+  begin
+    MsgBox('The install folder must not contain spaces (for example C:\TimetableSystem).', mbError, MB_OK);
+    Result := False;
+  end;
+end;

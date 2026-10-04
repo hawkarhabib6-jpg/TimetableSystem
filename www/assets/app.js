@@ -1,45 +1,98 @@
 // ============================================================
 // سیستەمی خشتەی هەفتانە — کۆدی پێشەوە
 // ============================================================
-const DAYS = ['یەکشەممە','دووشەممە','سێشەممە','چوارشەممە','پێنجشەممە'];
-const PERIODS = 6;
+const DEFAULT_DAYS = ['یەکشەممە','دووشەممە','سێشەممە','چوارشەممە','پێنجشەممە','هەینی','شەممە'];
 
-let CACHE = { teachers:[], subjects:[], classes:[] };
-let currentCell = null; // {day, period}
+let CFG = { days: DEFAULT_DAYS.slice(0,5), periods: 6, period_times: [], school_name: '' };
+let CACHE = { teachers:[], subjects:[], classes:[], rooms:[] };
 
-// --- API helper ---
-async function api(action, method='GET', body=null){
-  const opt = { method };
-  if (body){ opt.headers = {'Content-Type':'application/json'}; opt.body = JSON.stringify(body); }
-  const res = await fetch(`api/index.php?action=${action}`, opt);
-  return res.json();
+const $ = id => document.getElementById(id);
+
+// --- API: هەڵەکان وەک exception دەگەڕێنەوە و خۆکارانە پیشان دەدرێن ---
+class ApiError extends Error {}
+async function api(action, body=null, query=''){
+  const opt = body instanceof FormData ? { method:'POST', body }
+            : body ? { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) }
+            : { method:'GET' };
+  let r;
+  try {
+    const res = await fetch(`api/index.php?action=${action}${query}`, opt);
+    r = await res.json();
+  } catch (e) {
+    throw new ApiError('پەیوەندی لەگەڵ بەرنامەکە نەکرا: ' + e.message);
+  }
+  if (!r.ok) throw new ApiError(r.error || 'هەڵەیەکی نەزانراو');
+  return r;
 }
+window.addEventListener('unhandledrejection', e=>{
+  toast(e.reason?.message || String(e.reason), 'err');
+});
 
 function toast(msg, kind='ok'){
-  const t = document.getElementById('toast');
+  const t = $('toast');
   t.textContent = msg;
   t.className = 'toast ' + kind;
-  setTimeout(()=>{ t.className = 'toast hidden'; }, 3500);
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>{ t.className = 'toast hidden'; }, kind==='ok' ? 3000 : 6000);
 }
 
-function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function esc(s){
+  return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+const opts = (list, label, selected, empty) =>
+  (empty!==undefined ? `<option value="">${esc(empty)}</option>` : '') +
+  list.map(x=>`<option value="${x.id}" ${String(x.id)===String(selected)?'selected':''}>${esc(label(x))}</option>`).join('');
+const byId = (list, id) => list.find(x=>String(x.id)===String(id));
 
-// --- confirm ی دەستکرد (چونکە دیالۆگی ناوزەدی Chrome لە دێسکتۆپدا کار ناکات) ---
+// --- مۆداڵەکان ---
+function openModal(id){ $(id).classList.remove('hidden'); }
+function closeModal(id){ $(id).classList.add('hidden'); }
+document.addEventListener('click', e=>{
+  const c = e.target.closest('[data-close]');
+  if (c) c.closest('.modal').classList.add('hidden');
+});
+document.addEventListener('keydown', e=>{
+  if (e.key==='Escape') document.querySelectorAll('.modal:not(.hidden)').forEach(m=>{
+    if (m.dataset.temp) return; m.classList.add('hidden');
+  });
+});
+function showErr(boxId, msg){ const e=$(boxId); e.textContent=msg; e.classList.remove('hidden'); }
+function hideErr(boxId){ $(boxId).classList.add('hidden'); }
+
+// confirm ی دەستکرد (دیالۆگی ناوزەدی Chrome لە دێسکتۆپدا کار ناکات)
 function askConfirm(message){
   return new Promise(resolve=>{
     const ov = document.createElement('div');
-    ov.className = 'modal';
+    ov.className = 'modal'; ov.dataset.temp = '1';
     ov.innerHTML = `<div class="modal-box">
       <h3>دڵنیابوونەوە</h3>
       <p style="margin:10px 0 4px">${esc(message)}</p>
       <div class="modal-actions">
-        <button class="primary" id="cfYes">بەڵێ</button>
-        <button id="cfNo">نەخێر</button>
+        <button class="primary" data-yes>بەڵێ</button>
+        <button class="ghost" data-no>نەخێر</button>
       </div></div>`;
     document.body.appendChild(ov);
-    ov.querySelector('#cfYes').onclick = ()=>{ ov.remove(); resolve(true); };
-    ov.querySelector('#cfNo').onclick  = ()=>{ ov.remove(); resolve(false); };
+    ov.querySelector('[data-yes]').onclick = ()=>{ ov.remove(); resolve(true); };
+    ov.querySelector('[data-no]').onclick  = ()=>{ ov.remove(); resolve(false); };
   });
+}
+
+/** فۆڕمی گشتی: html ی خانەکان + فەنکشنی پاشەکەوتکردن (ئەگەر هەڵە بێت لە ناو فۆڕمەکەدا پیشان دەدرێت). */
+function openForm(title, html, onSave, saveLabel='پاشەکەوتکردن'){
+  $('formTitle').textContent = title;
+  $('formBody').innerHTML = html;
+  $('btnFormSave').textContent = saveLabel;
+  hideErr('formError');
+  $('btnFormSave').onclick = async ()=>{
+    $('btnFormSave').disabled = true;
+    try { if (await onSave() !== false) closeModal('formModal'); }
+    catch (e){ showErr('formError', e.message); }
+    finally { $('btnFormSave').disabled = false; }
+  };
+  openModal('formModal');
+  const first = $('formBody').querySelector('input,select');
+  if (first) first.focus();
 }
 
 // --- تابەکان ---
@@ -48,26 +101,111 @@ document.querySelectorAll('.tab').forEach(btn=>{
     document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+    $('tab-'+btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab==='report') loadReport();
+    if (btn.dataset.tab==='settings') { fillSettings(); loadBackups(); }
+    if (btn.dataset.tab==='timetable') renderTimetable();
   };
 });
 
+// ============ ڕێکخستنەکان ============
+async function loadSettings(){
+  CFG = (await api('settings_get')).data;
+  $('schoolName').textContent = CFG.school_name;
+}
+function periodLabel(p){ const t = CFG.period_times[p-1]; return t ? `${p}<small>${esc(t)}</small>` : `${p}`; }
+
+function fillSettings(){
+  $('setSchool').value = CFG.school_name;
+  $('setPeriods').value = CFG.periods;
+  $('setDaysCount').value = CFG.days.length;
+  renderDayInputs(CFG.days);
+  renderTimeInputs(CFG.periods, CFG.period_times);
+}
+function renderDayInputs(days){
+  $('setDays').innerHTML = days.map((d,i)=>
+    `<input class="day-name" value="${esc(d)}" placeholder="ناوی ڕۆژی ${i+1}">`).join('');
+}
+function renderTimeInputs(n, times){
+  let h = '';
+  for (let p=1;p<=n;p++) h += `<label class="inline">${p}: <input class="period-time" value="${esc(times[p-1]||'')}" placeholder="8:00 - 8:45"></label>`;
+  $('setTimes').innerHTML = h;
+}
+$('setDaysCount').oninput = ()=>{
+  const n = Math.min(7, Math.max(1, parseInt($('setDaysCount').value)||1));
+  const cur = [...document.querySelectorAll('.day-name')].map(i=>i.value);
+  renderDayInputs(Array.from({length:n}, (_,i)=> cur[i] ?? DEFAULT_DAYS[i]));
+};
+$('setPeriods').oninput = ()=>{
+  const n = Math.min(12, Math.max(1, parseInt($('setPeriods').value)||1));
+  renderTimeInputs(n, [...document.querySelectorAll('.period-time')].map(i=>i.value));
+};
+$('btnSaveSettings').onclick = async ()=>{
+  const r = await api('settings_save', {
+    school_name: $('setSchool').value,
+    periods: parseInt($('setPeriods').value),
+    days: [...document.querySelectorAll('.day-name')].map(i=>i.value),
+    period_times: [...document.querySelectorAll('.period-time')].map(i=>i.value),
+  });
+  CFG = r.data;
+  $('schoolName').textContent = CFG.school_name;
+  toast('ڕێکخستنەکان پاشەکەوت کران');
+};
+
+// ============ پاڵپشتی ============
+async function loadBackups(){
+  const r = await api('backup_list');
+  $('backupDir').textContent = r.dir;
+  $('bTable').innerHTML = `<tr><th>فایل</th><th>کات</th><th>قەبارە</th><th></th></tr>` +
+    (r.data.length ? r.data.map(b=>`<tr><td>${esc(b.file)}</td><td>${esc(b.time)}</td>
+      <td>${Math.ceil(b.size/1024)} KB</td>
+      <td class="actions">
+        <button class="ghost small" data-restore="${esc(b.file)}">گەڕاندنەوە</button>
+        <a class="btn ghost small" href="api/index.php?action=backup_download&file=${encodeURIComponent(b.file)}">⬇</a>
+      </td></tr>`).join('') : `<tr><td colspan="4" class="hint">هێشتا هیچ پاڵپشتییەک نییە.</td></tr>`);
+}
+$('btnBackup').onclick = async ()=>{ await api('backup_create', {}); loadBackups(); toast('پاڵپشتی گیرا'); };
+$('bTable').onclick = async e=>{
+  const f = e.target.closest('[data-restore]')?.dataset.restore;
+  if (!f) return;
+  if (!await askConfirm(`داتای ئێستا بە «${f}» دەگۆڕدرێت. (پێشتر پاڵپشتییەک لە داتای ئێستا دەگیرێت) بەردەوام بیت؟`)) return;
+  await api('backup_restore', {file:f});
+  toast('داتاکە گەڕێندرایەوە');
+  await reloadAll(); loadBackups();
+};
+$('restoreFile').onchange = async e=>{
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (!await askConfirm(`داتای ئێستا بە فایلی «${file.name}» دەگۆڕدرێت. بەردەوام بیت؟`)) return;
+  const fd = new FormData(); fd.append('file', file);
+  await api('backup_upload', fd);
+  toast('داتاکە گەڕێندرایەوە');
+  await reloadAll(); loadBackups();
+};
+
 // ============ مامۆستایان ============
 async function loadTeachers(){
-  const r = await api('teachers_list');
-  CACHE.teachers = r.data;
-  const t = document.getElementById('tTable');
-  t.innerHTML = `<tr><th>ناو</th><th>مۆبایل</th><th>میلاک</th><th>دراوە</th><th>ماوە</th><th></th></tr>` +
-    r.data.map(x=>`<tr>
+  CACHE.teachers = (await api('teachers_list')).data;
+  renderTeachers();
+}
+function subjectNames(ids){ return ids.map(id=>byId(CACHE.subjects,id)?.name).filter(Boolean).join('، '); }
+function renderTeachers(){
+  const f = $('tFilter').value.trim();
+  const list = CACHE.teachers.filter(x=>!f || x.full_name.includes(f));
+  $('tTable').innerHTML = `<tr><th>ناو</th><th>مۆبایل</th><th>بابەتەکان</th><th>میلاک</th><th>دراوە</th><th>ماوە</th><th></th></tr>` +
+    list.map(x=>`<tr>
       <td>${esc(x.full_name)}</td>
       <td>${esc(x.phone)}</td>
+      <td class="muted">${esc(subjectNames(x.subject_ids)) || '<span class="hint">دیاری نەکراوە</span>'}</td>
       <td>${x.max_periods}</td>
       <td>${x.assigned}</td>
       <td>${badge(x.remaining)}</td>
-      <td>
-        <button class="icon-btn" title="ڕۆژە بەتاڵەکان" onclick="openOffdays(${x.id},'${esc(x.full_name)}')">🗓</button>
-        <button class="icon-btn" onclick="delTeacher(${x.id})">🗑</button>
+      <td class="actions">
+        <button class="icon-btn edit" title="دەستکاریکردن" data-act="edit" data-id="${x.id}">✎</button>
+        <button class="icon-btn edit" title="ڕۆژە بەتاڵەکان" data-act="off" data-id="${x.id}">🗓</button>
+        <button class="icon-btn edit" title="خشتەی ئەم مامۆستایە" data-act="tt" data-id="${x.id}">▦</button>
+        <button class="icon-btn" title="سڕینەوە" data-act="del" data-id="${x.id}">🗑</button>
       </td>
     </tr>`).join('');
 }
@@ -76,228 +214,631 @@ function badge(rem){
   if (rem===0) return `<span class="badge full">پڕ</span>`;
   return `<span class="badge under">${rem}</span>`;
 }
-async function addTeacher(){
-  const full_name = document.getElementById('tName').value.trim();
-  const phone = document.getElementById('tPhone').value.trim();
-  const max_periods = parseInt(document.getElementById('tMax').value)||22;
-  if (!full_name) return toast('ناوی مامۆستا بنووسە','err');
-  await api('teacher_add','POST',{full_name,phone,max_periods});
-  document.getElementById('tName').value='';
-  document.getElementById('tPhone').value='';
-  loadTeachers();
-  toast('مامۆستا زیادکرا');
+$('tFilter').oninput = renderTeachers;
+$('tTable').onclick = async e=>{
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const t = byId(CACHE.teachers, b.dataset.id);
+  if (b.dataset.act==='edit') teacherForm(t);
+  if (b.dataset.act==='off') openOffdays(t);
+  if (b.dataset.act==='tt') showTimetableOf('teacher', t.id);
+  if (b.dataset.act==='del'){
+    if (!await askConfirm(`مامۆستا «${t.full_name}» بسڕدرێتەوە؟ (هەموو وانەکانیشی لە خشتەدا دەسڕێنەوە)`)) return;
+    await api('teacher_delete', {id:t.id});
+    await loadTeachers(); updateUndo();
+  }
+};
+function teacherForm(t){
+  t = t || { full_name:'', phone:'', max_periods:22, subject_ids:[] };
+  const subj = CACHE.subjects.map(s=>`<label class="chip-check">
+      <input type="checkbox" value="${s.id}" ${t.subject_ids.includes(Number(s.id))?'checked':''}> ${esc(s.name)}</label>`).join('')
+    || '<span class="hint">سەرەتا بابەت زیاد بکە.</span>';
+  openForm(t.id ? 'دەستکاریکردنی مامۆستا' : 'مامۆستای نوێ', `
+    <label>ناوی مامۆستا<input id="fName" value="${esc(t.full_name)}"></label>
+    <label>ژمارەی مۆبایل (ئارەزوومەندانە)<input id="fPhone" value="${esc(t.phone)}"></label>
+    <label>میلاک (زۆرترین بەشە وانە لە هەفتەیەکدا)<input id="fMax" type="number" min="1" max="60" value="${t.max_periods}"></label>
+    <label>ئەو بابەتانەی دەیڵێتەوە:</label><div class="chips" id="fSubj">${subj}</div>`,
+  async ()=>{
+    await api(t.id ? 'teacher_update' : 'teacher_add', {
+      id: t.id, full_name: $('fName').value, phone: $('fPhone').value,
+      max_periods: parseInt($('fMax').value),
+      subject_ids: [...document.querySelectorAll('#fSubj input:checked')].map(i=>Number(i.value)),
+    });
+    await loadTeachers();
+    toast(t.id ? 'مامۆستا نوێکرایەوە' : 'مامۆستا زیادکرا');
+  });
 }
-async function delTeacher(id){
-  if (!await askConfirm('ئەم مامۆستایە بسڕدرێتەوە؟ (خشتەکەشی دەسڕێتەوە)')) return;
-  await api('teacher_delete','POST',{id});
-  loadTeachers();
-}
+document.querySelector('[data-new="teacher"]').onclick = ()=>teacherForm(null);
 
 // ============ ڕۆژە بەتاڵەکان ============
-let offTeacherId = null;
-async function openOffdays(id, name){
-  offTeacherId = id;
-  document.getElementById('offTitle').textContent = `ڕۆژە بەتاڵەکانی: ${name}`;
-  // پڕکردنەوەی لیستەکان
-  document.getElementById('offDay').innerHTML =
-    DAYS.map((d,i)=>`<option value="${i}">${d}</option>`).join('');
+let offTeacher = null;
+function openOffdays(t){
+  offTeacher = t;
+  $('offTitle').textContent = `ڕۆژە بەتاڵەکانی: ${t.full_name}`;
+  $('offDay').innerHTML = CFG.days.map((d,i)=>`<option value="${i}">${esc(d)}</option>`).join('');
   let popts = '<option value="">هەموو ڕۆژەکە</option>';
-  for(let p=1;p<=PERIODS;p++) popts += `<option value="${p}">بەشە وانەی ${p}</option>`;
-  document.getElementById('offPeriod').innerHTML = popts;
-  document.getElementById('offdaysPanel').classList.remove('hidden');
+  for(let p=1;p<=CFG.periods;p++) popts += `<option value="${p}">بەشە وانەی ${p}</option>`;
+  $('offPeriod').innerHTML = popts;
+  $('offdaysPanel').classList.remove('hidden');
+  $('offdaysPanel').scrollIntoView({behavior:'smooth'});
   loadOffdays();
 }
-function closeOffdays(){ document.getElementById('offdaysPanel').classList.add('hidden'); offTeacherId=null; }
-
+$('btnCloseOff').onclick = ()=>{ $('offdaysPanel').classList.add('hidden'); offTeacher=null; };
 async function loadOffdays(){
-  const r = await api('offdays_list&teacher_id='+offTeacherId);
-  const box = document.getElementById('offList');
+  const r = await api('offdays_list', null, '&teacher_id='+offTeacher.id);
+  const box = $('offList');
   if(!r.data.length){ box.innerHTML='<span class="hint">هیچ کاتێکی بەتاڵ زیاد نەکراوە.</span>'; return; }
   box.innerHTML = r.data.map(o=>{
-    const label = o.period_no ? `${DAYS[o.day_of_week]} — بەشە وانەی ${o.period_no}`
-                              : `${DAYS[o.day_of_week]} — هەموو ڕۆژەکە`;
-    return `<span class="off-chip">${label}
-      <b onclick="delOffday(${o.id})">✕</b></span>`;
+    const day = esc(CFG.days[o.day_of_week] ?? '?');
+    const label = o.period_no ? `${day} — بەشە وانەی ${o.period_no}` : `${day} — هەموو ڕۆژەکە`;
+    return `<span class="off-chip">${label} <b data-id="${o.id}" title="سڕینەوە">✕</b></span>`;
   }).join('');
 }
-async function addOffday(){
-  const day_of_week = parseInt(document.getElementById('offDay').value);
-  const period_no = document.getElementById('offPeriod').value;
-  await api('offday_add','POST',{teacher_id:offTeacherId, day_of_week, period_no});
+$('offList').onclick = async e=>{
+  const id = e.target.closest('b[data-id]')?.dataset.id; if (!id) return;
+  await api('offday_delete', {id}); loadOffdays();
+};
+$('btnAddOff').onclick = async ()=>{
+  const r = await api('offday_add', {
+    teacher_id: offTeacher.id, day_of_week: parseInt($('offDay').value), period_no: $('offPeriod').value });
   loadOffdays();
-  toast('کاتی بەتاڵ زیادکرا');
-}
-async function delOffday(id){
-  await api('offday_delete','POST',{id});
-  loadOffdays();
-}
+  if (r.warning) toast(r.warning, 'warn'); else toast('کاتی بەتاڵ زیادکرا');
+};
 
 // ============ بابەتەکان ============
 async function loadSubjects(){
-  const r = await api('subjects_list');
-  CACHE.subjects = r.data;
-  document.getElementById('sTable').innerHTML =
-    `<tr><th>ناوی بابەت</th><th></th></tr>` +
-    r.data.map(x=>`<tr><td>${esc(x.name)}</td>
-      <td><button class="icon-btn" onclick="delSubject(${x.id})">🗑</button></td></tr>`).join('');
+  CACHE.subjects = (await api('subjects_list')).data;
+  $('sTable').innerHTML = `<tr><th>ناوی بابەت</th><th>مامۆستاکان</th><th></th></tr>` +
+    CACHE.subjects.map(x=>{
+      const teachers = CACHE.teachers.filter(t=>t.subject_ids.includes(Number(x.id))).map(t=>t.full_name).join('، ');
+      return `<tr><td>${esc(x.name)}</td><td class="muted">${esc(teachers)}</td>
+      <td class="actions">
+        <button class="icon-btn edit" data-act="edit" data-id="${x.id}">✎</button>
+        <button class="icon-btn" data-act="del" data-id="${x.id}">🗑</button></td></tr>`;
+    }).join('');
 }
-async function addSubject(){
-  const name = document.getElementById('sName').value.trim();
-  if (!name) return toast('ناوی بابەت بنووسە','err');
-  await api('subject_add','POST',{name});
-  document.getElementById('sName').value='';
-  loadSubjects();
-  toast('بابەت زیادکرا');
-}
-async function delSubject(id){
-  if(!await askConfirm('بسڕدرێتەوە؟')) return;
-  await api('subject_delete','POST',{id}); loadSubjects();
+$('btnAddSubject').onclick = async ()=>{
+  await api('subject_add', {name: $('sName').value});
+  $('sName').value='';
+  await loadSubjects(); toast('بابەت زیادکرا');
+};
+$('sName').onkeydown = e=>{ if (e.key==='Enter') $('btnAddSubject').click(); };
+$('sTable').onclick = async e=>{
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const s = byId(CACHE.subjects, b.dataset.id);
+  if (b.dataset.act==='edit') renameForm('بابەت', s, 'subject_update', loadSubjects);
+  if (b.dataset.act==='del'){
+    if(!await askConfirm(`بابەتی «${s.name}» بسڕدرێتەوە؟ (هەموو وانەکانی ئەم بابەتە لە خشتەدا دەسڕێنەوە)`)) return;
+    await api('subject_delete', {id:s.id}); await loadSubjects(); loadTeachers(); updateUndo();
+  }
+};
+function renameForm(what, item, action, reload, extra=''){
+  openForm(`گۆڕینی ناوی ${what}`, `<label>ناو<input id="fName" value="${esc(item.name)}"></label>${extra}`,
+    async ()=>{
+      const body = { id:item.id, name: $('fName').value };
+      if ($('fGrade')) body.grade_level = parseInt($('fGrade').value)||0;
+      await api(action, body); await reload();
+    });
 }
 
-// ============ پۆلەکان ============
+// ============ پۆلەکان و پرۆگرامی خوێندن ============
+let currClass = null;
 async function loadClasses(){
-  const r = await api('classes_list');
-  CACHE.classes = r.data;
-  document.getElementById('cTable').innerHTML =
-    `<tr><th>ناوی پۆل</th><th>ئاست</th><th></th></tr>` +
-    r.data.map(x=>`<tr><td>${esc(x.name)}</td><td>${x.grade_level??''}</td>
-      <td><button class="icon-btn" onclick="delClass(${x.id})">🗑</button></td></tr>`).join('');
-  // نوێکردنەوەی لیستی پۆل لە خشتەدا
-  const sel = document.getElementById('ttClass');
-  const prev = sel.value;
-  sel.innerHTML = r.data.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
-  if (prev) sel.value = prev;
-  if (sel.value) renderTimetable();
+  CACHE.classes = (await api('classes_list')).data;
+  const curr = (await api('curriculum_list')).data;
+  const need = {};
+  curr.forEach(c=> need[c.class_id] = (need[c.class_id]||0) + Number(c.periods_per_week));
+  const cap = CFG.days.length * CFG.periods;
+  $('cTable').innerHTML = `<tr><th>ناوی پۆل</th><th>ئاست</th><th>وانەی هەفتانە</th><th></th></tr>` +
+    CACHE.classes.map(x=>`<tr class="${currClass && currClass.id==x.id ? 'selected':''}">
+      <td>${esc(x.name)}</td><td>${x.grade_level??''}</td>
+      <td>${need[x.id]||0} / ${cap} ${(need[x.id]||0) > cap ? '<span class="badge over">زیاترە</span>':''}</td>
+      <td class="actions">
+        <button class="ghost small" data-act="curr" data-id="${x.id}">پرۆگرام</button>
+        <button class="icon-btn edit" data-act="tt" data-id="${x.id}" title="خشتە">▦</button>
+        <button class="icon-btn edit" data-act="edit" data-id="${x.id}">✎</button>
+        <button class="icon-btn" data-act="del" data-id="${x.id}">🗑</button></td></tr>`).join('');
+  if (currClass) {
+    currClass = byId(CACHE.classes, currClass.id) || null;
+    currClass ? renderCurriculum(curr.filter(c=>c.class_id==currClass.id)) : $('currPanel').classList.add('hidden');
+  }
+  fillEntitySelect();
 }
-async function addClass(){
-  const name = document.getElementById('cName').value.trim();
-  const grade_level = parseInt(document.getElementById('cGrade').value)||0;
-  if (!name) return toast('ناوی پۆل بنووسە','err');
-  await api('class_add','POST',{name,grade_level});
-  document.getElementById('cName').value='';
-  document.getElementById('cGrade').value='';
-  loadClasses();
-  toast('پۆل زیادکرا');
+$('btnAddClass').onclick = async ()=>{
+  await api('class_add', {name: $('cName').value, grade_level: parseInt($('cGrade').value)||0});
+  $('cName').value=''; $('cGrade').value='';
+  await loadClasses(); toast('پۆل زیادکرا');
+};
+$('cName').onkeydown = e=>{ if (e.key==='Enter') $('btnAddClass').click(); };
+$('cTable').onclick = async e=>{
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const c = byId(CACHE.classes, b.dataset.id);
+  if (b.dataset.act==='curr'){ currClass = c; loadClasses(); }
+  if (b.dataset.act==='tt') showTimetableOf('class', c.id);
+  if (b.dataset.act==='edit') renameForm('پۆل', c, 'class_update', loadClasses,
+    `<label>ئاست<input id="fGrade" type="number" min="1" max="12" value="${c.grade_level??''}"></label>`);
+  if (b.dataset.act==='del'){
+    if(!await askConfirm(`پۆلی «${c.name}» بسڕدرێتەوە؟ (خشتە و پرۆگرامەکەشی دەسڕێتەوە)`)) return;
+    await api('class_delete', {id:c.id}); await loadClasses(); loadTeachers(); updateUndo();
+  }
+};
+let CURR = [];
+function renderCurriculum(rows){
+  CURR = rows;
+  $('currPanel').classList.remove('hidden');
+  $('currTitle').textContent = `پرۆگرامی خوێندنی پۆلی «${currClass.name}»`;
+  $('currCopyFrom').innerHTML = opts(CACHE.classes.filter(c=>c.id!=currClass.id), c=>c.name, '', '— پۆلێک هەڵبژێرە —');
+  const total = rows.reduce((s,r)=>s+Number(r.periods_per_week),0);
+  $('currTable').innerHTML = `<tr><th>بابەت</th><th>گرووپ</th><th>مامۆستا</th><th>ژوور</th><th>هەفتانە</th><th>دووانی</th><th>دانراوە</th><th></th></tr>` +
+    rows.map(r=>`<tr>
+      <td>${esc(r.subject_name)}</td><td>${esc(r.group_name)}</td>
+      <td>${r.teacher_name ? esc(r.teacher_name) : '<span class="badge over">نییە</span>'}</td>
+      <td>${esc(r.room_name||'')}</td><td>${r.periods_per_week}</td><td>${r.double_count||''}</td>
+      <td><span class="badge ${r.placed==r.periods_per_week?'full':(r.placed>r.periods_per_week?'over':'under')}">${r.placed}/${r.periods_per_week}</span></td>
+      <td class="actions"><button class="icon-btn edit" data-act="edit" data-id="${r.id}">✎</button>
+        <button class="icon-btn" data-act="del" data-id="${r.id}">🗑</button></td></tr>`).join('') +
+    `<tr class="total"><td colspan="4">کۆ</td><td colspan="4">${total} / ${CFG.days.length*CFG.periods}</td></tr>`;
 }
-async function delClass(id){
-  if(!await askConfirm('بسڕدرێتەوە؟ (خشتەکەشی دەسڕێتەوە)')) return;
-  await api('class_delete','POST',{id}); loadClasses();
+$('currTable').onclick = async e=>{
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const r = byId(CURR, b.dataset.id);
+  if (b.dataset.act==='edit') curriculumForm(r);
+  if (b.dataset.act==='del'){
+    if(!await askConfirm(`«${r.subject_name}» لە پرۆگرامی ئەم پۆلە لابدرێت؟ (وانە دانراوەکان دەمێننەوە)`)) return;
+    await api('curriculum_delete', {id:r.id}); loadClasses();
+  }
+};
+document.querySelector('[data-new="curriculum"]').onclick = ()=>curriculumForm(null);
+$('btnCopyCurr').onclick = async ()=>{
+  const from = $('currCopyFrom').value;
+  if (!from) return toast('پۆلێک هەڵبژێرە بۆ کۆپیکردن', 'err');
+  await api('curriculum_copy', {from_class_id: from, to_class_id: currClass.id});
+  await loadClasses(); toast('پرۆگرامەکە کۆپی کرا — مامۆستاکان دیاری بکە');
+};
+function teachersFor(subjectId){
+  // مامۆستایانی ئەم بابەتە یەکەم دێن
+  const q = CACHE.teachers.filter(t=>t.subject_ids.includes(Number(subjectId)));
+  const rest = CACHE.teachers.filter(t=>!q.includes(t));
+  return [q, rest];
 }
+function teacherOptions(subjectId, selected){
+  const [q, rest] = teachersFor(subjectId);
+  const o = list => list.map(t=>`<option value="${t.id}" ${String(t.id)===String(selected)?'selected':''}>${esc(t.full_name)} (${t.remaining} ماوە)</option>`).join('');
+  return `<option value="">— هەڵبژێرە —</option>` +
+    (q.length ? `<optgroup label="مامۆستایانی ئەم بابەتە">${o(q)}</optgroup><optgroup label="مامۆستایانی تر">${o(rest)}</optgroup>` : o(rest));
+}
+function curriculumForm(r){
+  r = r || { subject_id: CACHE.subjects[0]?.id, teacher_id:'', room_id:'', group_name:'', periods_per_week:2, double_count:0 };
+  openForm(r.id ? 'دەستکاریکردنی بابەتی پرۆگرام' : `بابەت بۆ پۆلی «${currClass.name}»`, `
+    <label>بابەت<select id="fSubj">${opts(CACHE.subjects, s=>s.name, r.subject_id)}</select></label>
+    <label>مامۆستا<select id="fTeacher">${teacherOptions(r.subject_id, r.teacher_id)}</select></label>
+    <div class="row2">
+      <label>وانەی هەفتانە<input id="fPpw" type="number" min="1" max="40" value="${r.periods_per_week}"></label>
+      <label>ژمارەی وانەی دووانی<input id="fDbl" type="number" min="0" max="20" value="${r.double_count}"></label>
+    </div>
+    <div class="row2">
+      <label>ژوور (ئارەزوومەندانە)<select id="fRoom">${opts(CACHE.rooms, x=>x.name, r.room_id, '— بێ ژوور —')}</select></label>
+      <label>گرووپ (ئارەزوومەندانە)<input id="fGroup" value="${esc(r.group_name)}" placeholder="بۆ نموونە: کچان"></label>
+    </div>
+    <p class="hint">گرووپ: ئەگەر پۆلەکە دابەش دەبێت (بۆ نموونە کوڕان/کچان)، دوو گرووپی جیاواز دەتوانن لە یەک کاتدا وانەیان هەبێت.</p>`,
+  async ()=>{
+    await api('curriculum_save', {
+      id: r.id, class_id: currClass.id, subject_id: $('fSubj').value, teacher_id: $('fTeacher').value,
+      room_id: $('fRoom').value, group_name: $('fGroup').value,
+      periods_per_week: parseInt($('fPpw').value), double_count: parseInt($('fDbl').value)||0,
+    });
+    await loadClasses();
+  });
+  $('fSubj').onchange = ()=>{ $('fTeacher').innerHTML = teacherOptions($('fSubj').value, $('fTeacher').value); };
+}
+
+// ============ ژوورەکان ============
+async function loadRooms(){
+  CACHE.rooms = (await api('rooms_list')).data;
+  $('rmTable').innerHTML = `<tr><th>ناوی ژوور</th><th></th></tr>` +
+    CACHE.rooms.map(x=>`<tr><td>${esc(x.name)}</td>
+      <td class="actions">
+        <button class="icon-btn edit" data-act="tt" data-id="${x.id}" title="خشتە">▦</button>
+        <button class="icon-btn edit" data-act="edit" data-id="${x.id}">✎</button>
+        <button class="icon-btn" data-act="del" data-id="${x.id}">🗑</button></td></tr>`).join('');
+  fillEntitySelect();
+}
+$('btnAddRoom').onclick = async ()=>{
+  await api('room_add', {name: $('rName').value});
+  $('rName').value='';
+  await loadRooms(); toast('ژوور زیادکرا');
+};
+$('rName').onkeydown = e=>{ if (e.key==='Enter') $('btnAddRoom').click(); };
+$('rmTable').onclick = async e=>{
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const r = byId(CACHE.rooms, b.dataset.id);
+  if (b.dataset.act==='tt') showTimetableOf('room', r.id);
+  if (b.dataset.act==='edit') renameForm('ژوور', r, 'room_update', loadRooms);
+  if (b.dataset.act==='del'){
+    if(!await askConfirm(`ژووری «${r.name}» بسڕدرێتەوە؟ (وانەکان دەمێننەوە بەبێ ژوور)`)) return;
+    await api('room_delete', {id:r.id}); loadRooms();
+  }
+};
 
 // ============ خشتەی هەفتانە ============
-document.getElementById('ttClass').onchange = renderTimetable;
+const VIEW_SOURCES = {
+  class:   ()=>CACHE.classes.map(c=>({id:c.id, name:c.name})),
+  teacher: ()=>CACHE.teachers.map(t=>({id:t.id, name:t.full_name})),
+  room:    ()=>CACHE.rooms.map(r=>({id:r.id, name:r.name})),
+};
+function fillEntitySelect(){
+  const sel = $('ttEntity');
+  const prev = sel.value;
+  const list = VIEW_SOURCES[$('ttView').value]();
+  sel.innerHTML = opts(list, x=>x.name, prev);
+  if (!sel.value && list.length) sel.value = list[0].id;
+}
+$('ttView').onchange = ()=>{ $('ttEntity').innerHTML=''; fillEntitySelect(); renderTimetable(); };
+$('ttEntity').onchange = renderTimetable;
+function showTimetableOf(view, id){
+  $('ttView').value = view;
+  $('ttEntity').innerHTML = '';
+  fillEntitySelect();
+  $('ttEntity').value = id;
+  document.querySelector('.tab[data-tab="timetable"]').click();
+}
 
-async function renderTimetable(){
-  const class_id = document.getElementById('ttClass').value;
-  if (!class_id){ document.getElementById('ttGridWrap').innerHTML='<p class="hint">سەرەتا پۆلێک زیاد بکە.</p>'; return; }
+/** دەقی ناو خانەیەک بەپێی جۆری پیشاندان. */
+function lessonHtml(x, view){
+  const g = x.group_name ? `<span class="grp">${esc(x.group_name)}</span>` : '';
+  const lines = [`<div class="subj">${esc(x.subject_name)} ${g}</div>`];
+  if (view!=='class')   lines.push(`<div class="teach">${esc(x.class_name)}</div>`);
+  if (view!=='teacher') lines.push(`<div class="teach">${esc(x.teacher_name)}</div>`);
+  if (view!=='room' && x.room_name) lines.push(`<div class="room">${esc(x.room_name)}</div>`);
+  return lines.join('');
+}
 
-  const r = await api('timetable_get&class_id='+class_id);
-  const map = {}; // "day-period" -> row
-  r.data.forEach(x=> map[`${x.day_of_week}-${x.period_no}`] = x);
-
-  let html = '<table class="tt-table"><tr><th>بەشە وانە</th>';
-  DAYS.forEach(d=> html += `<th>${d}</th>`);
+function gridHtml(rows, view, interactive){
+  const map = {};
+  rows.forEach(x=> (map[`${x.day_of_week}-${x.period_no}`] ||= []).push(x));
+  let html = '<table class="tt-table"><tr><th class="ph">بەشە وانە</th>';
+  CFG.days.forEach(d=> html += `<th>${esc(d)}</th>`);
   html += '</tr>';
-
-  for (let p=1; p<=PERIODS; p++){
-    html += `<tr><td class="periodhead">${p}</td>`;
-    for (let d=0; d<DAYS.length; d++){
-      const cell = map[`${d}-${p}`];
-      if (cell){
-        html += `<td><div class="tt-cell filled" onclick="removeCell(${cell.id})">
-          <div class="subj">${esc(cell.subject_name)}</div>
-          <div class="teach">${esc(cell.teacher_name)}</div>
-          <div class="rm">✕ سڕینەوە</div>
-        </div></td>`;
-      } else {
-        html += `<td><div class="tt-cell empty" onclick="openAssign(${d},${p})">+</div></td>`;
-      }
+  for (let p=1; p<=CFG.periods; p++){
+    html += `<tr><td class="periodhead">${periodLabel(p)}</td>`;
+    for (let d=0; d<CFG.days.length; d++){
+      const cell = map[`${d}-${p}`] || [];
+      const inner = cell.map(x=>`<div class="lesson ${x.locked==1?'locked':'auto'}" ${interactive?`draggable="true" data-id="${x.id}"`:''}>
+          ${lessonHtml(x, view)}</div>`).join('');
+      html += `<td class="${interactive?'slot':''}" data-d="${d}" data-p="${p}">${inner || (interactive?'<div class="empty">+</div>':'')}</td>`;
     }
     html += '</tr>';
   }
-  html += '</table>';
-  document.getElementById('ttGridWrap').innerHTML = html;
-
-  const filled = r.data.length;
-  document.getElementById('ttHint').textContent = `پڕکراوە: ${filled} / ${PERIODS*DAYS.length} خانە`;
+  return html + '</table>';
 }
 
-// --- دیالۆگی دانان ---
-function openAssign(day, period){
-  currentCell = {day, period};
-  document.getElementById('assignTitle').textContent =
-    `دانانی وانە — ${DAYS[day]}، بەشە وانەی ${period}`;
-  const subSel = document.getElementById('asSubject');
-  subSel.innerHTML = CACHE.subjects.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
-  const teachSel = document.getElementById('asTeacher');
-  teachSel.innerHTML = CACHE.teachers.map(t=>`<option value="${t.id}">${esc(t.full_name)}</option>`).join('');
-  document.getElementById('suggestBox').innerHTML='';
-  hideError();
-  document.getElementById('assignModal').classList.remove('hidden');
+let TT_ROWS = [];
+async function renderTimetable(){
+  const view = $('ttView').value, id = $('ttEntity').value;
+  if (!id){
+    const what = {class:'پۆلێک', teacher:'مامۆستایەک', room:'ژوورێک'}[view];
+    $('ttGridWrap').innerHTML = `<p class="hint">سەرەتا ${what} زیاد بکە.</p>`;
+    $('ttHint').textContent = '';
+    return;
+  }
+  TT_ROWS = (await api('timetable_get', null, `&view=${view}&id=${id}`)).data;
+  $('ttGridWrap').innerHTML = gridHtml(TT_ROWS, view, true);
+  const total = CFG.periods*CFG.days.length;
+  let hint = `پڕکراوە: ${new Set(TT_ROWS.map(x=>x.day_of_week+'-'+x.period_no)).size} / ${total} خانە`;
+  if (view==='class'){
+    const curr = (await api('curriculum_list', null, '&class_id='+id)).data;
+    if (curr.length){
+      const need = curr.reduce((s,c)=>s+Number(c.periods_per_week),0);
+      const missing = curr.reduce((s,c)=>s+Math.max(0, c.periods_per_week - c.placed),0);
+      hint += missing ? ` — ${missing} وانە لە ${need} وانەی پرۆگرام ماوە` : ' — پرۆگرامەکە تەواوە ✓';
+    }
+  }
+  if (view==='teacher'){
+    const t = byId(CACHE.teachers, id);
+    if (t) hint += ` — میلاک: ${t.assigned}/${t.max_periods}`;
+  }
+  $('ttHint').textContent = hint;
 }
-function closeModal(){ document.getElementById('assignModal').classList.add('hidden'); }
-function showError(msg){ const e=document.getElementById('assignError'); e.textContent=msg; e.classList.remove('hidden'); }
-function hideError(){ document.getElementById('assignError').classList.add('hidden'); }
 
-async function suggestTeachers(){
-  const class_id = document.getElementById('ttClass').value;
-  const subject_id = document.getElementById('asSubject').value;
-  const r = await api('timetable_suggest','POST',{
-    class_id, subject_id, day_of_week:currentCell.day, period_no:currentCell.period });
-  const box = document.getElementById('suggestBox');
-  if (!r.data.length){ box.innerHTML='<span class="hint">هیچ مامۆستایەکی بەردەست نییە (هەموویان تێکهەڵچوونیان هەیە یان میلاکیان پڕە).</span>'; return; }
+// کرتە: خانەی بەتاڵ → وانەی نوێ؛ وانە → دەستکاریکردن
+$('ttGridWrap').onclick = e=>{
+  const l = e.target.closest('.lesson[data-id]');
+  if (l) return openLesson(byId(TT_ROWS, l.dataset.id));
+  const td = e.target.closest('td.slot');
+  if (td) openLesson(null, +td.dataset.d, +td.dataset.p);
+};
+
+// ڕاکێشان و دانان (drag & drop) بۆ گواستنەوە یان ئاڵوگۆڕ
+let dragId = null;
+$('ttGridWrap').addEventListener('dragstart', e=>{
+  const l = e.target.closest('.lesson[data-id]'); if (!l) return;
+  dragId = l.dataset.id;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', dragId);
+  l.classList.add('dragging');
+});
+$('ttGridWrap').addEventListener('dragend', ()=>{
+  dragId = null;
+  document.querySelectorAll('.dragging,.drop-over').forEach(x=>x.classList.remove('dragging','drop-over'));
+});
+$('ttGridWrap').addEventListener('dragover', e=>{
+  const td = e.target.closest('td.slot'); if (!td || !dragId) return;
+  e.preventDefault();
+  document.querySelectorAll('.drop-over').forEach(x=>x!==td && x.classList.remove('drop-over'));
+  td.classList.add('drop-over');
+});
+$('ttGridWrap').addEventListener('drop', async e=>{
+  const td = e.target.closest('td.slot'); if (!td || !dragId) return;
+  e.preventDefault();
+  const id = dragId; dragId = null;
+  const src = byId(TT_ROWS, id);
+  const d = +td.dataset.d, p = +td.dataset.p;
+  if (src.day_of_week==d && src.period_no==p) return renderTimetable();
+  const targets = TT_ROWS.filter(x=>x.day_of_week==d && x.period_no==p);
+  try {
+    if (targets.length===1){
+      await api('timetable_swap', {id_a:id, id_b:targets[0].id});
+      toast('وانەکان ئاڵوگۆڕ کران');
+    } else {
+      const r = await api('timetable_update', {id, day_of_week:d, period_no:p});
+      toast(r.warning || 'وانە گوازرایەوە', r.warning?'warn':'ok');
+    }
+  } catch (err){ toast(err.message, 'err'); }
+  refreshAfterChange();
+});
+
+// --- دیالۆگی وانە ---
+let editing = null; // {id?, day, period}
+function openLesson(row, day, period){
+  const view = $('ttView').value, entity = $('ttEntity').value;
+  editing = row ? {id: row.id, day: row.day_of_week, period: row.period_no} : {day, period};
+  const base = row || {
+    class_id:   view==='class'   ? entity : (CACHE.classes[0]?.id || ''),
+    teacher_id: view==='teacher' ? entity : '',
+    room_id:    view==='room'    ? entity : '',
+    subject_id: '', group_name: '', locked: 1,
+  };
+  if (!CACHE.classes.length || !CACHE.subjects.length || !CACHE.teachers.length){
+    return toast('سەرەتا پۆل، بابەت و مامۆستا زیاد بکە.', 'err');
+  }
+  $('lessonTitle').textContent = `${row ? 'دەستکاریکردنی وانە' : 'دانانی وانە'} — ${CFG.days[editing.day]}، بەشە وانەی ${editing.period}`;
+  $('lsClass').innerHTML = opts(CACHE.classes, c=>c.name, base.class_id);
+  $('lsRoom').innerHTML = opts(CACHE.rooms, r=>r.name, base.room_id, '— بێ ژوور —');
+  $('lsGroup').value = base.group_name || '';
+  $('lsLocked').checked = base.locked==1;
+  $('lsDouble').checked = false;
+  $('lsDoubleWrap').classList.toggle('hidden', !!row || editing.period >= CFG.periods);
+  $('btnDeleteLesson').classList.toggle('hidden', !row);
+  $('suggestBox').innerHTML = '';
+  hideErr('lessonError');
+  fillLessonSubjects(base.subject_id).then(()=>{
+    if (!row && !base.teacher_id) applyPlanned(); else fillLessonTeachers(base.teacher_id);
+  });
+  openModal('lessonModal');
+}
+let LS_CURR = [];
+/** بابەتەکانی پرۆگرامی پۆلەکە یەکەم دێن، لەگەڵ ژمارەی وانە ماوەکانیان. */
+async function fillLessonSubjects(selected){
+  LS_CURR = (await api('curriculum_list', null, '&class_id='+$('lsClass').value)).data;
+  const inCurr = LS_CURR.map(c=>{
+    const s = byId(CACHE.subjects, c.subject_id);
+    const left = c.periods_per_week - c.placed;
+    return `<option value="${c.subject_id}" data-group="${esc(c.group_name)}">${esc(s?.name)}${c.group_name?' ('+esc(c.group_name)+')':''} — ${left>0?left+' ماوە':'تەواوە'}</option>`;
+  }).join('');
+  const others = CACHE.subjects.filter(s=>!LS_CURR.some(c=>c.subject_id==s.id))
+    .map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  $('lsSubject').innerHTML = inCurr
+    ? `<optgroup label="پرۆگرامی ئەم پۆلە">${inCurr}</optgroup>${others?`<optgroup label="بابەتەکانی تر">${others}</optgroup>`:''}`
+    : others;
+  if (selected) {
+    const g = $('lsGroup').value;
+    const opt = [...$('lsSubject').options].find(o=>o.value==selected && (o.dataset.group??'')===g)
+             || [...$('lsSubject').options].find(o=>o.value==selected);
+    if (opt) opt.selected = true;
+  } else {
+    // یەکەم بابەت کە هێشتا وانەی ماوە
+    const firstLeft = LS_CURR.findIndex(c=>c.periods_per_week > c.placed);
+    if (firstLeft >= 0) $('lsSubject').selectedIndex = firstLeft;
+  }
+}
+function fillLessonTeachers(selected){
+  $('lsTeacher').innerHTML = teacherOptions($('lsSubject').value, selected);
+}
+/** گرووپ، مامۆستا و ژووری پرۆگرامەکە بە خۆکاری پڕ دەکرێنەوە. */
+function applyPlanned(){
+  const opt = $('lsSubject').selectedOptions[0];
+  const c = LS_CURR.find(x=>x.subject_id==$('lsSubject').value && x.group_name===(opt?.dataset.group ?? ''));
+  if (c){
+    $('lsGroup').value = c.group_name;
+    if (c.room_id) $('lsRoom').value = c.room_id;
+  }
+  const keep = $('ttView').value==='teacher' && !editing.id ? $('ttEntity').value : '';
+  fillLessonTeachers(keep || c?.teacher_id || '');
+}
+$('lsClass').onchange = ()=>fillLessonSubjects().then(applyPlanned);
+$('lsSubject').onchange = applyPlanned;
+
+function lessonBody(){
+  return {
+    id: editing.id, class_id: $('lsClass').value, subject_id: $('lsSubject').value,
+    teacher_id: $('lsTeacher').value, room_id: $('lsRoom').value, group_name: $('lsGroup').value,
+    day_of_week: editing.day, period_no: editing.period,
+    locked: $('lsLocked').checked ? 1 : 0, double: $('lsDouble').checked,
+  };
+}
+$('btnSuggest').onclick = async ()=>{
+  const r = await api('timetable_suggest', lessonBody());
+  const box = $('suggestBox');
+  if (!r.data.length){ box.innerHTML='<span class="hint">هیچ مامۆستایەکی بەردەست نییە (تێکهەڵچوونیان هەیە، بەتاڵن، یان میلاکیان پڕە).</span>'; return; }
   box.innerHTML = r.data.map(t=>
-    `<span class="suggest-chip" onclick="pickTeacher(${t.id})">${esc(t.name)} <span class="rem">(${t.remaining} ماوە)</span></span>`
+    `<span class="suggest-chip ${t.planned?'planned':''}" data-id="${t.id}">${t.planned?'★ ':''}${esc(t.name)} <span class="rem">(${t.remaining} ماوە)</span></span>`
   ).join('');
-}
-function pickTeacher(id){
-  document.getElementById('asTeacher').value = id;
-  hideError();
-}
+};
+$('suggestBox').onclick = e=>{
+  const id = e.target.closest('[data-id]')?.dataset.id; if (!id) return;
+  $('lsTeacher').value = id; hideErr('lessonError');
+};
+$('btnSaveLesson').onclick = async ()=>{
+  const b = lessonBody();
+  if (!b.subject_id) return showErr('lessonError', 'بابەت هەڵبژێرە.');
+  if (!b.teacher_id) return showErr('lessonError', 'مامۆستا هەڵبژێرە.');
+  try {
+    const r = await api(editing.id ? 'timetable_update' : 'timetable_assign', b);
+    closeModal('lessonModal');
+    toast(r.warning || (editing.id ? 'وانە نوێکرایەوە' : 'وانە دانرا'), r.warning ? 'warn' : 'ok');
+    refreshAfterChange();
+  } catch (e){ showErr('lessonError', e.message); }
+};
+$('btnDeleteLesson').onclick = async ()=>{
+  await api('timetable_remove', {id: editing.id});
+  closeModal('lessonModal');
+  toast('وانە سڕایەوە');
+  refreshAfterChange();
+};
 
-async function doAssign(){
-  const class_id = document.getElementById('ttClass').value;
-  const subject_id = document.getElementById('asSubject').value;
-  const teacher_id = document.getElementById('asTeacher').value;
-  if (!subject_id) return showError('بابەت هەڵبژێرە.');
-  if (!teacher_id) return showError('مامۆستا هەڵبژێرە.');
-
-  const r = await api('timetable_assign','POST',{
-    class_id, subject_id, teacher_id,
-    day_of_week:currentCell.day, period_no:currentCell.period });
-
-  if (!r.ok){ showError(r.error); return; }
-  closeModal();
-  renderTimetable();
+async function refreshAfterChange(){
+  await renderTimetable();
   loadTeachers();
-  if (r.warning) toast(r.warning,'warn');
-  else toast('وانە دانرا');
+  updateUndo();
 }
 
-async function removeCell(id){
-  if(!await askConfirm('ئەم وانەیە بسڕدرێتەوە؟')) return;
-  await api('timetable_remove','POST',{id});
-  renderTimetable();
-  loadTeachers();
+// --- گەڕانەوە ---
+async function updateUndo(){
+  const info = (await api('undo_info')).data;
+  $('btnUndo').disabled = !info;
+  $('btnUndo').title = info ? `گەڕانەوەی: ${info.label} (${info.created_at})` : '';
+}
+$('btnUndo').onclick = async ()=>{
+  const r = await api('undo', {});
+  toast(`گەڕێندرایەوە: ${r.label}`);
+  refreshAfterChange();
+};
+document.addEventListener('keydown', e=>{
+  if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z' && !e.target.matches('input,textarea')
+      && !$('btnUndo').disabled && $('tab-timetable').classList.contains('active')) {
+    e.preventDefault(); $('btnUndo').click();
+  }
+});
+
+// --- دروستکردنی ئۆتۆماتیکی ---
+$('btnGenerate').onclick = ()=>{
+  openForm('دروستکردنی ئۆتۆماتیکی خشتە', `
+    <p>سیستەمەکە بەپێی <b>پرۆگرامی خوێندنی هەر پۆلێک</b> (لە تابی پۆلەکان) وانەکان دادەنێت و ڕێز لە
+    کاتی بەتاڵی مامۆستایان، میلاک، ژوور و گرووپەکان دەگرێت.</p>
+    <label class="check"><input type="checkbox" id="fRegen" checked>
+      وانە ئۆتۆماتیکییە کۆنەکان بسڕەوە و لە سەرەتاوە دروستی بکەرەوە (وانە 🔒 قوفڵکراوەکان دەمێننەوە)</label>
+    <p class="hint">ئەگەر ئەم بژاردەیە نەکرێت، تەنها وانە ماوەکان زیاد دەکرێن. هەمیشە دەتوانیت بە «↶ گەڕانەوە» بگەڕێیتەوە.</p>`,
+  async ()=>{
+    const regenerate = $('fRegen').checked;
+    closeModal('formModal');
+    $('ttProgress').textContent = '⏳ خشتە دروست دەکرێت... (چەند چرکەیەک)';
+    $('ttProgress').classList.remove('hidden');
+    $('btnGenerate').disabled = true;
+    try {
+      const r = (await api('timetable_generate', {regenerate})).data;
+      showGenerateResult(r);
+    } finally {
+      $('ttProgress').classList.add('hidden');
+      $('btnGenerate').disabled = false;
+      refreshAfterChange();
+    }
+    return false;
+  }, 'دەستپێکردن');
+};
+function showGenerateResult(r){
+  if (!r.total && !r.messages.length){
+    return toast('هیچ وانەیەک بۆ دانان نییە — سەرەتا پرۆگرامی خوێندنی پۆلەکان پڕ بکەرەوە.', 'warn');
+  }
+  const ok = r.placed === r.total && !r.messages.length;
+  openForm(ok ? 'خشتەکە بە تەواوی دروست کرا ✓' : 'خشتەکە بە بەشێکی دروست کرا', `
+    <p>${r.placed} لە ${r.total} یەکەی وانە دانران.</p>
+    ${r.messages.length ? `<ul class="issues-list">${r.messages.map(m=>`<li>${esc(m)}</li>`).join('')}</ul>
+      <p class="hint">بۆ چارەسەر: کاتی بەتاڵی مامۆستاکان کەم بکەرەوە، میلاک زیاد بکە، مامۆستای تر دیاری بکە،
+      یان وانە ماوەکان بە دەست دابنێ.</p>` : ''}`,
+    async ()=>true, 'باشە');
+}
+
+// --- پاککردنەوە ---
+$('btnClear').onclick = ()=>{
+  const isClass = $('ttView').value==='class' && $('ttEntity').value;
+  const name = isClass ? $('ttEntity').selectedOptions[0].text : '';
+  openForm('پاککردنەوەی خشتە', `
+    ${isClass ? `<label class="check"><input type="radio" name="fScope" value="class" checked> تەنها پۆلی «${esc(name)}»</label>` : ''}
+    <label class="check"><input type="radio" name="fScope" value="all" ${isClass?'':'checked'}> هەموو پۆلەکان</label>
+    <label class="check"><input type="checkbox" id="fOnlyAuto"> تەنها وانە ئۆتۆماتیکییەکان (قوفڵکراوەکان بمێننەوە)</label>`,
+  async ()=>{
+    const scope = document.querySelector('[name=fScope]:checked').value;
+    const r = await api('timetable_clear', {scope, class_id: $('ttEntity').value, only_auto: $('fOnlyAuto').checked});
+    toast(`${r.deleted} وانە سڕایەوە — بە «↶ گەڕانەوە» دەتوانیت بیگەڕێنیتەوە`);
+    refreshAfterChange();
+  }, 'سڕینەوە');
+};
+
+// --- هەناردە بۆ Excel ---
+$('btnExport').onclick = ()=>{
+  openForm('هەناردەکردن بۆ Excel', `
+    <label class="check"><input type="radio" name="fExp" value="class" checked> خشتەی هەموو پۆلەکان</label>
+    <label class="check"><input type="radio" name="fExp" value="teacher"> خشتەی هەموو مامۆستایان</label>
+    <label class="check"><input type="radio" name="fExp" value="room"> خشتەی هەموو ژوورەکان</label>`,
+  async ()=>{
+    const v = document.querySelector('[name=fExp]:checked').value;
+    location.href = `api/index.php?action=export_csv&view=${v}`;
+  }, 'داگرتن');
+};
+
+// --- چاپ / PDF ---
+$('btnPrint').onclick = ()=>{
+  const cur = $('ttEntity').selectedOptions[0]?.text || '';
+  openForm('چاپکردن', `
+    <label class="check"><input type="radio" name="fPr" value="current" checked> تەنها ئەم خشتەیە (${esc(cur)})</label>
+    <label class="check"><input type="radio" name="fPr" value="class"> هەموو پۆلەکان (هەر پۆلێک لە پەڕەیەک)</label>
+    <label class="check"><input type="radio" name="fPr" value="teacher"> هەموو مامۆستایان</label>
+    <label class="check"><input type="radio" name="fPr" value="room"> هەموو ژوورەکان</label>
+    <p class="hint">بۆ PDF: لە پەنجەرەی چاپدا «Save as PDF» هەڵبژێرە.</p>`,
+  async ()=>{
+    const which = document.querySelector('[name=fPr]:checked').value;
+    await printTimetables(which);
+  }, 'چاپ');
+};
+async function printTimetables(which){
+  const view = which==='current' ? $('ttView').value : which;
+  const all = (await api('timetable_get', null, '&view=all')).data;
+  const fk = {class:'class_id', teacher:'teacher_id', room:'room_id'}[view];
+  const label = {class:'پۆلی', teacher:'مامۆستا', room:'ژووری'}[view];
+  let list = VIEW_SOURCES[view]();
+  if (which==='current') list = list.filter(x=>String(x.id)===$('ttEntity').value);
+  $('printArea').innerHTML = list.map(e=>`<div class="print-page">
+      <div class="print-head"><span>${esc(CFG.school_name)}</span><b>خشتەی هەفتانەی ${label} ${esc(e.name)}</b></div>
+      ${gridHtml(all.filter(x=>String(x[fk])===String(e.id)), view, false)}
+    </div>`).join('');
+  closeModal('formModal');
+  setTimeout(()=>window.print(), 50);
 }
 
 // ============ ڕاپۆرت ============
 async function loadReport(){
-  const r = await api('load_report');
-  document.getElementById('rTable').innerHTML =
+  const [v, r] = await Promise.all([api('validate'), api('load_report')]);
+  $('validateBox').innerHTML = v.data.length
+    ? `<ul class="issues-list">${v.data.map(i=>`<li class="${i.level}">${i.level==='error'?'⛔':'⚠'} ${esc(i.text)}</li>`).join('')}</ul>`
+    : '<p class="ok-box">✓ هیچ کێشەیەک نەدۆزرایەوە.</p>';
+  $('rTable').innerHTML =
     `<tr><th>مامۆستا</th><th>میلاک</th><th>دراوە</th><th>ماوە</th><th>دۆخ</th></tr>` +
     r.data.map(x=>{
-      let st = x.status==='over' ? '<span class="badge over">میلاک تێپەڕاندووە</span>'
-             : x.status==='full'? '<span class="badge full">تەواو</span>'
-             : '<span class="badge under">وانەی کەمتری هەیە</span>';
+      const st = x.status==='over' ? '<span class="badge over">میلاک تێپەڕاندووە</span>'
+               : x.status==='full'? '<span class="badge full">تەواو</span>'
+               : '<span class="badge under">وانەی کەمتری هەیە</span>';
       return `<tr><td>${esc(x.full_name)}</td><td>${x.max_periods}</td>
         <td>${x.assigned}</td><td>${x.remaining}</td><td>${st}</td></tr>`;
     }).join('');
 }
 
 // --- دەستپێک ---
-(async function init(){
+async function reloadAll(){
+  await loadSettings();
   await loadTeachers();
-  await loadSubjects();
+  await Promise.all([loadSubjects(), loadRooms()]);
   await loadClasses();
-})();
+  renderTeachers();
+  await renderTimetable();
+  updateUndo();
+}
+reloadAll();

@@ -1,0 +1,10 @@
+# داتای بەکارهێنەر و فایلە دروستکراوەکان — ناچنە ناو git
+timetable.db
+www/timetable.db
+backups/
+www/tmp/
+webcache/
+debug.log
+TimetableSystem-Setup.exe
+TimetableSystem-Portable.zip
+release/

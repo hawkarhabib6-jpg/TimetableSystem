@@ -3,6 +3,7 @@ name: Build Windows App
 on:
   push:
     branches: [main, master]
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -47,7 +48,8 @@ jobs:
       - name: Build installer
         shell: pwsh
         run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '2.0.0' }
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" installer.iss
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -57,14 +59,13 @@ jobs:
             TimetableSystem-Setup.exe
             TimetableSystem-Portable.zip
 
-      - name: Commit builds to repo
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path release | Out-Null
-          Copy-Item "TimetableSystem-Setup.exe" "release\" -Force
-          Copy-Item "TimetableSystem-Portable.zip" "release\" -Force
-          git config user.name "github-actions"
-          git config user.email "actions@users.noreply.github.com"
-          git add release/*
-          git commit -m "Build Windows app"
-          git push
+      # فایلەکان ناچنە ناو ڕیپۆ (ڕیپۆ گەورە دەکەن)؛ لە جیاتی ئەوە:
+      # - هەر push ـێک: لە بەشی Actions وەک artifact دادەگیرێن
+      # - هەر tag ـێکی v* (بۆ نموونە v2.0.0): وەک GitHub Release بڵاو دەکرێنەوە
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            TimetableSystem-Setup.exe
+            TimetableSystem-Portable.zip

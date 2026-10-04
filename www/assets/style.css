@@ -55,15 +55,6 @@ table.grid tr:hover td{background:#FAFDFA}
 .tt-table th,.tt-table td{border:1px solid var(--line);padding:4px;text-align:center;vertical-align:top}
 .tt-table th{background:var(--primary);color:#fff;font-size:13px;padding:8px 4px}
 .tt-table td.periodhead{background:#EAF0EA;color:var(--primary);font-weight:700;font-size:13px}
-.tt-cell{min-height:56px;cursor:pointer;border-radius:6px;padding:6px 4px;transition:background .15s}
-.tt-cell.empty{color:#B0BCB0}
-.tt-cell.empty:hover{background:#F0F7F0}
-.tt-cell.filled{background:#E8F5E9}
-.tt-cell .subj{font-weight:700;font-size:13px;color:var(--primary)}
-.tt-cell .teach{font-size:12px;color:var(--muted);margin-top:2px}
-.tt-cell .rm{color:var(--danger);font-size:11px;margin-top:3px;display:none}
-.tt-cell.filled:hover .rm{display:block}
-
 /* ستەیتەسی میلاک */
 .badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700}
 .badge.under{background:#FFF3E0;color:var(--warn)}
@@ -79,7 +70,7 @@ table.grid tr:hover td{background:#FAFDFA}
 .modal-box select{width:100%}
 .modal-actions{display:flex;gap:10px;margin-top:18px}
 .modal-actions .primary{flex:1}
-#btnSuggest{margin-top:12px;background:#0277BD}
+#btnSuggest{margin-top:12px}
 .suggest-box{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px}
 .suggest-chip{background:#E1F5FE;color:#0277BD;border:1px solid #B3E5FC;padding:6px 12px;border-radius:999px;cursor:pointer;font-size:13px}
 .suggest-chip:hover{background:#B3E5FC}
@@ -103,3 +94,93 @@ table.grid tr:hover td{background:#FAFDFA}
 .off-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .off-chip{background:#FFF3E0;color:var(--warn);border:1px solid #FFE0B2;padding:6px 12px;border-radius:999px;font-size:13px}
 .off-chip b{cursor:pointer;margin-right:6px;color:var(--danger)}
+
+/* ---------- گشتی ---------- */
+.hidden{display:none !important}
+.spacer{flex:1}
+.muted{color:var(--muted);font-size:13px}
+.school{font-weight:400;font-size:15px;opacity:.85;margin-right:8px}
+button:disabled{opacity:.45;cursor:default}
+button.accent{background:var(--accent);color:#3E2723;font-weight:700}
+button.accent:hover{background:#FFB300}
+button.info{background:#0277BD}
+button.info:hover{background:#01579B}
+button.small,.btn.small{padding:4px 10px;font-size:12px}
+button.ghost:hover,.btn.ghost:hover{background:#DDE5DD}
+.danger-text{color:var(--danger) !important}
+.btn{display:inline-block;font-size:14px;padding:9px 16px;border-radius:8px;cursor:pointer;text-decoration:none;
+  background:var(--primary);color:#fff}
+.btn.ghost{background:#ECEFEC;color:var(--primary);border:1px solid var(--line)}
+.icon-btn.edit{color:var(--primary)}
+.icon-btn:hover{background:#F0F4F0}
+td.actions{white-space:nowrap;width:1%}
+input.filter{min-width:220px}
+h2{color:var(--primary);font-size:18px;margin:18px 0 10px}
+h4{margin:14px 0 6px;color:var(--muted);font-size:13px}
+code{background:#EEF2EE;padding:2px 6px;border-radius:4px;direction:ltr;display:inline-block}
+table.grid tr.selected td{background:#E8F5E9}
+table.grid tr.total td{font-weight:700;background:#F6F8F6}
+
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+@media (max-width:900px){.two-col{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card h3{color:var(--primary);margin-bottom:10px}
+.card label{display:block;margin:10px 0 4px}
+.card label input{display:block;width:100%;margin-top:4px}
+.card label.inline{display:flex;align-items:center;gap:8px;margin:4px 0}
+.card label.inline input{margin:0}
+.card .primary{margin-top:14px;width:100%}
+.stack{display:flex;flex-direction:column;gap:6px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.modal-box input{width:100%}
+.modal-box label.check,.card label.check{display:flex;gap:8px;align-items:center;margin:10px 0;cursor:pointer}
+.modal-box label.check input{width:auto}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip-check{display:inline-flex !important;align-items:center;gap:4px;margin:0 !important;padding:4px 10px;
+  border:1px solid var(--line);border-radius:999px;font-size:13px;cursor:pointer}
+.chip-check input{width:auto !important}
+.suggest-chip.planned{background:#FFF8E1;border-color:#FFE082;color:#8D6E00}
+.progress{background:#FFF8E1;border:1px solid #FFE082;padding:10px 14px;border-radius:8px;margin-bottom:12px}
+.legend{margin-top:12px}
+
+/* ---------- خانەکانی خشتە ---------- */
+.tt-table td.periodhead small{display:block;font-weight:400;font-size:10px;color:var(--muted);direction:ltr}
+.tt-table td.slot{cursor:pointer;height:64px}
+.tt-table td.slot:hover{background:#F6FAF6}
+.tt-table td.drop-over{background:#FFF8E1 !important;outline:2px dashed var(--accent)}
+.tt-table .empty{color:#B0BCB0;padding-top:18px}
+.lesson{border-radius:6px;padding:5px 4px;margin:2px 0;background:#E8F5E9;border:1px solid #C8E6C9;cursor:grab}
+.lesson.auto{background:#E3F2FD;border-color:#BBDEFB}
+.lesson.locked .subj::after{content:" 🔒";font-size:9px}
+.lesson.dragging{opacity:.4}
+.lesson .subj{font-weight:700;font-size:13px;color:var(--primary)}
+.lesson .teach{font-size:12px;color:var(--muted);margin-top:2px}
+.lesson .room{font-size:11px;color:#6A1B9A;margin-top:2px}
+.lesson .grp{font-size:10px;font-weight:400;background:#FFF3E0;color:var(--warn);padding:0 5px;border-radius:999px}
+
+/* ---------- ڕاپۆرت ---------- */
+.issues-list{list-style:none;display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.issues-list li{background:#FFF8E1;border:1px solid #FFE082;padding:8px 12px;border-radius:8px;font-size:13px}
+.issues-list li.error{background:#FFEBEE;border-color:#FFCDD2;color:var(--danger)}
+.ok-box{background:#E8F5E9;color:var(--ok);padding:12px;border-radius:8px}
+
+/* ---------- چاپ ---------- */
+.print-only{display:none}
+@media print{
+  @page{size:A4 landscape;margin:10mm}
+  body{background:#fff}
+  .no-print,.modal,.toast{display:none !important}
+  .print-only{display:block}
+  .print-page{page-break-after:always;break-after:page}
+  .print-page:last-child{page-break-after:auto;break-after:auto}
+  .print-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;font-size:16px}
+  .print-head b{font-size:20px}
+  .tt-table{font-size:12px}
+  .tt-table th{background:#eee !important;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .tt-table td{height:auto}
+  .lesson{background:none !important;border:none;padding:2px}
+  .lesson.locked .subj::after{content:""}
+  .lesson .subj{color:#000}
+}
+input[hidden]{display:none !important}
+.card label.btn{display:inline-block;margin:0}

@@ -5,84 +5,277 @@
 require_once __DIR__ . '/db.php';
 
 /**
+ * ئایا دوو وانە دەتوانن لە یەک کاتدا بۆ یەک پۆل بن؟
+ * تەنها ئەگەر هەردووکیان گرووپیان هەبێت و گرووپەکانیان جیاواز بن.
+ */
+function groups_compatible($a, $b) {
+    return $a !== '' && $b !== '' && $a !== $b;
+}
+
+/**
  * پشکنینی هەموو ڕێگرییەکان پێش دانانی وانەیەک.
+ * $l = [class_id, teacher_id, room_id, group_name, day_of_week, period_no]
  * ئەگەر کێشەیەک هەبێت، ناوەڕۆکی هەڵەکە دەگەڕێنێتەوە، ئەگەر نا null.
  */
-function check_conflicts($pdo, $class_id, $teacher_id, $day, $period, $ignore_id = null) {
+function check_conflicts($pdo, $l, $ignore_ids = []) {
+    $day = (int) $l['day_of_week'];
+    $period = (int) $l['period_no'];
+    $group = trim($l['group_name'] ?? '');
+    $ignore = array_map('intval', (array) $ignore_ids);
+    $notIgnored = $ignore ? ' AND t.id NOT IN (' . implode(',', $ignore) . ')' : '';
+    $days = cfg_days($pdo);
 
     // ٠) دروستی ژمارەکان
-    if ($day < 0 || $day >= DAYS_COUNT) return 'ڕۆژی هەڵە.';
-    if ($period < 1 || $period > PERIODS_PER_DAY) return 'بەشە وانەی هەڵە.';
+    if ($day < 0 || $day >= count($days)) return 'ڕۆژی هەڵە.';
+    if ($period < 1 || $period > cfg_periods($pdo)) return 'بەشە وانەی هەڵە.';
 
-    // ١) ئایا پۆلەکە لەم خانەیەدا وانەی هەیە؟
-    $sql = "SELECT t.id, s.name subj, te.full_name teacher
+    // ١) ئایا پۆلەکە لەم خانەیەدا وانەی هەیە؟ (گرووپی جیاواز ڕێگەپێدراوە)
+    $rows = q($pdo, "SELECT t.group_name, s.name subj, te.full_name teacher
             FROM timetable t
             JOIN subjects s  ON s.id = t.subject_id
             JOIN teachers te ON te.id = t.teacher_id
-            WHERE t.class_id = ? AND t.day_of_week = ? AND t.period_no = ?";
-    $params = [$class_id, $day, $period];
-    if ($ignore_id) { $sql .= " AND t.id <> ?"; $params[] = $ignore_id; }
-    $row = q1($pdo, $sql, $params);
-    if ($row) {
-        return "ئەم پۆلە لەم کاتەدا وانەی «{$row['subj']}» ی هەیە لەگەڵ مامۆستا {$row['teacher']}.";
+            WHERE t.class_id = ? AND t.day_of_week = ? AND t.period_no = ? $notIgnored",
+        [(int) $l['class_id'], $day, $period]);
+    foreach ($rows as $row) {
+        if (!groups_compatible($group, $row['group_name'])) {
+            $g = $row['group_name'] !== '' ? " (گرووپی {$row['group_name']})" : '';
+            return "ئەم پۆلە لەم کاتەدا وانەی «{$row['subj']}»{$g} ی هەیە لەگەڵ مامۆستا {$row['teacher']}.";
+        }
     }
 
     // ٢) ئایا مامۆستاکە لەم خانەیەدا لە پۆلێکی تر وانەی هەیە؟
-    $sql = "SELECT t.id, c.name cls
-            FROM timetable t
-            JOIN classes c ON c.id = t.class_id
-            WHERE t.teacher_id = ? AND t.day_of_week = ? AND t.period_no = ?";
-    $params = [$teacher_id, $day, $period];
-    if ($ignore_id) { $sql .= " AND t.id <> ?"; $params[] = $ignore_id; }
-    $row = q1($pdo, $sql, $params);
+    $row = q1($pdo, "SELECT c.name cls FROM timetable t JOIN classes c ON c.id = t.class_id
+            WHERE t.teacher_id = ? AND t.day_of_week = ? AND t.period_no = ? $notIgnored",
+        [(int) $l['teacher_id'], $day, $period]);
     if ($row) {
-        return "ئەم مامۆستایە لەم کاتەدا لە پۆلی «{$row['cls']}» وانەی هەیە — ناتوانێت لە دوو پۆلدا بێت.";
+        return "ئەم مامۆستایە لەم کاتەدا لە پۆلی «{$row['cls']}» وانەی هەیە — ناتوانێت لە دوو شوێندا بێت.";
     }
 
     // ٣) ئایا ئەم کاتە بۆ مامۆستاکە بەتاڵ (off) کراوە؟
-    $sql = "SELECT id FROM teacher_offdays
-            WHERE teacher_id = ? AND day_of_week = ?
-              AND (period_no IS NULL OR period_no = ?)";
-    $row = q1($pdo, $sql, [$teacher_id, $day, $period]);
+    $row = q1($pdo, "SELECT id FROM teacher_offdays
+            WHERE teacher_id = ? AND day_of_week = ? AND (period_no IS NULL OR period_no = ?)",
+        [(int) $l['teacher_id'], $day, $period]);
     if ($row) {
         return "ئەم مامۆستایە لەم ڕۆژ/کاتەدا بەتاڵە (ناتوانێت دەوام بکات).";
+    }
+
+    // ٤) ئایا ژوورەکە لەم کاتەدا گیراوە؟
+    if (!empty($l['room_id'])) {
+        $row = q1($pdo, "SELECT c.name cls, r.name room FROM timetable t
+                JOIN classes c ON c.id = t.class_id JOIN rooms r ON r.id = t.room_id
+                WHERE t.room_id = ? AND t.day_of_week = ? AND t.period_no = ? $notIgnored",
+            [(int) $l['room_id'], $day, $period]);
+        if ($row) {
+            return "ژووری «{$row['room']}» لەم کاتەدا بۆ پۆلی «{$row['cls']}» گیراوە.";
+        }
     }
 
     return null; // هیچ تێکهەڵچوونێک نییە
 }
 
-/** میلاکی مامۆستا: چەند بەشە وانەی دراوەتێ لە کۆی چەند. */
-function teacher_load($pdo, $teacher_id) {
-    $assigned = (int) q1($pdo,
-        "SELECT COUNT(*) c FROM timetable WHERE teacher_id = ?",
-        [$teacher_id])['c'];
-    $max = (int) q1($pdo,
-        "SELECT max_periods m FROM teachers WHERE id = ?",
-        [$teacher_id])['m'];
-    return ['assigned' => $assigned, 'max' => $max, 'remaining' => $max - $assigned];
+/** میلاکی هەموو مامۆستایان بە یەک query: [teacher_id => assigned] */
+function teacher_loads($pdo) {
+    $out = [];
+    foreach (q($pdo, "SELECT teacher_id, COUNT(*) c FROM timetable GROUP BY teacher_id") as $r) {
+        $out[(int) $r['teacher_id']] = (int) $r['c'];
+    }
+    return $out;
 }
 
-/** پێشنیاری ئۆتۆماتیکی مامۆستایانی بەردەست بۆ خانەیەکی دیاریکراو. */
-function suggest_teachers($pdo, $class_id, $subject_id, $day, $period) {
-    // مامۆستایانێک کە:
-    //  - لەم کاتەدا بەردەستن (تێکهەڵچوونیان نییە)
-    //  - میلاکەکەیان پڕ نەبووە
-    $rows = q($pdo, "SELECT id, full_name FROM teachers ORDER BY full_name");
+/** لیستی مامۆستایان لەگەڵ میلاک و بابەتەکانیان. */
+function teachers_with_load($pdo) {
+    $loads = teacher_loads($pdo);
+    $subj = [];
+    foreach (q($pdo, "SELECT teacher_id, subject_id FROM teacher_subjects") as $r) {
+        $subj[(int) $r['teacher_id']][] = (int) $r['subject_id'];
+    }
+    $rows = q($pdo, "SELECT * FROM teachers ORDER BY full_name");
+    foreach ($rows as &$r) {
+        $id = (int) $r['id'];
+        $r['assigned']    = $loads[$id] ?? 0;
+        $r['remaining']   = (int) $r['max_periods'] - $r['assigned'];
+        $r['subject_ids'] = $subj[$id] ?? [];
+    }
+    return $rows;
+}
+
+/**
+ * پێشنیاری ئۆتۆماتیکی مامۆستایانی بەردەست بۆ خانەیەکی دیاریکراو.
+ * تەنها ئەو مامۆستایانەی ئەم بابەتە دەڵێنەوە (ئەگەر بابەتەکەیان دیاری کرابێت)،
+ * و مامۆستای دیاریکراوی پرۆگرامی خوێندن یەکەم دێت.
+ */
+function suggest_teachers($pdo, $l, $subject_id, $ignore_ids = []) {
+    $subject_id = (int) $subject_id;
+    $qualified = array_map('intval', array_column(
+        q($pdo, "SELECT teacher_id FROM teacher_subjects WHERE subject_id = ?", [$subject_id]), 'teacher_id'));
+    $planned = q1($pdo, "SELECT teacher_id FROM class_subjects
+                         WHERE class_id = ? AND subject_id = ? AND group_name = ?",
+        [(int) $l['class_id'], $subject_id, trim($l['group_name'] ?? '')]);
+    $plannedId = $planned ? (int) $planned['teacher_id'] : 0;
+
+    // وانەی دەستکاریکراو لە میلاکی مامۆستاکەی خۆی ناژمێردرێت
+    $freed = [];
+    foreach ($ignore_ids as $iid) {
+        $r = q1($pdo, "SELECT teacher_id FROM timetable WHERE id = ?", [(int) $iid]);
+        if ($r) $freed[(int) $r['teacher_id']] = ($freed[(int) $r['teacher_id']] ?? 0) + 1;
+    }
+
     $out = [];
-    foreach ($rows as $t) {
-        $conflict = check_conflicts($pdo, $class_id, $t['id'], $day, $period);
-        if ($conflict) continue;
-        $load = teacher_load($pdo, $t['id']);
-        if ($load['remaining'] <= 0) continue;
+    foreach (teachers_with_load($pdo) as $t) {
+        $id = (int) $t['id'];
+        $t['remaining'] += $freed[$id] ?? 0;
+        // ئەگەر هیچ مامۆستایەک بۆ ئەم بابەتە دیاری نەکرابێت، هەمووان پیشان بدە
+        if ($qualified && !in_array($id, $qualified, true) && $id !== $plannedId) continue;
+        if ($t['remaining'] <= 0) continue;
+        if (check_conflicts($pdo, ['teacher_id' => $id] + $l, $ignore_ids)) continue;
         $out[] = [
-            'id'        => $t['id'],
+            'id'        => $id,
             'name'      => $t['full_name'],
-            'remaining' => $load['remaining'],
+            'remaining' => $t['remaining'],
+            'planned'   => $id === $plannedId,
         ];
     }
-    // ئەوانەی زۆرترین بەشە وانەی ماوەیان هەیە یەکەم
-    usort($out, fn($a, $b) => $b['remaining'] - $a['remaining']);
+    // مامۆستای پرۆگرام یەکەم، پاشان ئەوانەی زۆرترین بەشە وانەیان ماوە
+    usort($out, fn($a, $b) => [$b['planned'], $b['remaining']] <=> [$a['planned'], $a['remaining']]);
     return $out;
+}
+
+/** کۆی وانەکانی هەر بابەتێکی پۆلێک کە دانراون: "class|subject|group" => count */
+function placed_counts($pdo) {
+    $out = [];
+    foreach (q($pdo, "SELECT class_id, subject_id, group_name, COUNT(*) c FROM timetable
+                      GROUP BY class_id, subject_id, group_name") as $r) {
+        $out["{$r['class_id']}|{$r['subject_id']}|{$r['group_name']}"] = (int) $r['c'];
+    }
+    return $out;
+}
+
+/** پرۆگرامی خوێندنی پۆلێک (یان هەموو پۆلەکان) لەگەڵ ژمارەی وانە دانراوەکان. */
+function curriculum($pdo, $class_id = null) {
+    $sql = "SELECT cs.*, s.name subject_name, te.full_name teacher_name, r.name room_name, c.name class_name
+            FROM class_subjects cs
+            JOIN subjects s ON s.id = cs.subject_id
+            JOIN classes  c ON c.id = cs.class_id
+            LEFT JOIN teachers te ON te.id = cs.teacher_id
+            LEFT JOIN rooms r ON r.id = cs.room_id";
+    $rows = $class_id ? q($pdo, "$sql WHERE cs.class_id = ? ORDER BY s.name, cs.group_name", [(int) $class_id])
+                      : q($pdo, "$sql ORDER BY c.grade_level, c.name, s.name, cs.group_name");
+    $placed = placed_counts($pdo);
+    foreach ($rows as &$r) {
+        $r['placed'] = $placed["{$r['class_id']}|{$r['subject_id']}|{$r['group_name']}"] ?? 0;
+    }
+    return $rows;
+}
+
+/**
+ * پشکنینی گشتی خشتەکە — هەموو کێشەکان دەگەڕێنێتەوە.
+ * هەر کێشەیەک: [level => error|warn, text]
+ */
+function validate_all($pdo) {
+    $issues = [];
+    $days = cfg_days($pdo);
+    $periods = cfg_periods($pdo);
+    $dayName = fn($d) => $days[$d] ?? ('ڕۆژی ' . ($d + 1));
+
+    // ١) وانە کە لەگەڵ کاتی بەتاڵی مامۆستا تێکدەگیرێت
+    foreach (q($pdo, "SELECT t.day_of_week, t.period_no, te.full_name, c.name cls, s.name subj
+            FROM timetable t
+            JOIN teacher_offdays o ON o.teacher_id = t.teacher_id AND o.day_of_week = t.day_of_week
+                                  AND (o.period_no IS NULL OR o.period_no = t.period_no)
+            JOIN teachers te ON te.id = t.teacher_id
+            JOIN classes c ON c.id = t.class_id
+            JOIN subjects s ON s.id = t.subject_id
+            ORDER BY te.full_name, t.day_of_week, t.period_no") as $r) {
+        $issues[] = ['level' => 'error', 'text' =>
+            "مامۆستا {$r['full_name']} لە {$dayName($r['day_of_week'])}، بەشە وانەی {$r['period_no']} بەتاڵە، بەڵام وانەی «{$r['subj']}» ی پۆلی «{$r['cls']}» ی هەیە."];
+    }
+
+    // ٢) میلاک تێپەڕێنراو
+    foreach (teachers_with_load($pdo) as $t) {
+        if ($t['remaining'] < 0) {
+            $issues[] = ['level' => 'warn', 'text' =>
+                "مامۆستا {$t['full_name']} میلاکی تێپەڕاندووە ({$t['assigned']}/{$t['max_periods']})."];
+        }
+    }
+
+    // ٣) پرۆگرامی خوێندن: کەم یان زیاد
+    foreach (curriculum($pdo) as $c) {
+        $g = $c['group_name'] !== '' ? " (گرووپی {$c['group_name']})" : '';
+        if ($c['placed'] < $c['periods_per_week']) {
+            $issues[] = ['level' => 'warn', 'text' =>
+                "پۆلی «{$c['class_name']}»: «{$c['subject_name']}»{$g} {$c['placed']} لە {$c['periods_per_week']} وانەی دانراوە."];
+        } elseif ($c['placed'] > $c['periods_per_week']) {
+            $issues[] = ['level' => 'warn', 'text' =>
+                "پۆلی «{$c['class_name']}»: «{$c['subject_name']}»{$g} {$c['placed']} وانەی هەیە، زیاترە لە {$c['periods_per_week']}."];
+        }
+        if (!$c['teacher_id']) {
+            $issues[] = ['level' => 'warn', 'text' =>
+                "پۆلی «{$c['class_name']}»: هیچ مامۆستایەک بۆ «{$c['subject_name']}»{$g} دیاری نەکراوە."];
+        }
+    }
+
+    // ٤) مامۆستا بابەتێک دەڵێتەوە کە لە لیستی بابەتەکانیدا نییە
+    foreach (q($pdo, "SELECT DISTINCT te.full_name, s.name subj FROM timetable t
+            JOIN teachers te ON te.id = t.teacher_id JOIN subjects s ON s.id = t.subject_id
+            WHERE EXISTS (SELECT 1 FROM teacher_subjects x WHERE x.teacher_id = t.teacher_id)
+              AND NOT EXISTS (SELECT 1 FROM teacher_subjects x
+                              WHERE x.teacher_id = t.teacher_id AND x.subject_id = t.subject_id)") as $r) {
+        $issues[] = ['level' => 'warn', 'text' =>
+            "مامۆستا {$r['full_name']} وانەی «{$r['subj']}» دەڵێتەوە، بەڵام ئەم بابەتە لە لیستی بابەتەکانیدا نییە."];
+    }
+
+    // ٥) وانە لە دەرەوەی ڕۆژ/بەشە وانەکانی ئێستا (دوای گۆڕینی ڕێکخستن)
+    $n = (int) q1($pdo, "SELECT COUNT(*) c FROM timetable WHERE day_of_week >= ? OR period_no > ?",
+        [count($days), $periods])['c'];
+    if ($n) {
+        $issues[] = ['level' => 'error', 'text' => "{$n} وانە لە دەرەوەی ڕۆژ/بەشە وانەکانی ئێستادان."];
+    }
+
+    return $issues;
+}
+
+// ---------------- گەڕانەوە (Undo) ----------------
+const UNDO_KEEP = 30;
+
+/** پێش هەر گۆڕانکارییەکی خشتە، وێنەیەکی تەواوی خشتەکە هەڵدەگیرێت. */
+function undo_push($pdo, $label) {
+    $rows = q($pdo, "SELECT id, class_id, teacher_id, subject_id, room_id, group_name,
+                            day_of_week, period_no, locked, created_at FROM timetable");
+    $pdo->prepare("INSERT INTO undo_log (label, snapshot) VALUES (?, ?)")
+        ->execute([$label, json_encode($rows)]);
+    $pdo->exec("DELETE FROM undo_log WHERE id NOT IN (SELECT id FROM undo_log ORDER BY id DESC LIMIT " . UNDO_KEEP . ")");
+}
+
+function undo_pop($pdo) {
+    $last = q1($pdo, "SELECT * FROM undo_log ORDER BY id DESC LIMIT 1");
+    if (!$last) return null;
+    $rows = json_decode($last['snapshot'], true) ?: [];
+    // ئەو مامۆستا/پۆل/بابەتانەی دواتر سڕاونەتەوە ناگەڕێنەوە
+    $exists = fn($table, $id) => (bool) q1($pdo, "SELECT 1 FROM $table WHERE id = ?", [$id]);
+    $pdo->beginTransaction();
+    try {
+        $pdo->exec("DELETE FROM timetable");
+        $st = $pdo->prepare("INSERT INTO timetable (id, class_id, teacher_id, subject_id, room_id, group_name,
+                             day_of_week, period_no, locked, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)");
+        foreach ($rows as $r) {
+            if (!$exists('classes', $r['class_id']) || !$exists('teachers', $r['teacher_id'])
+                || !$exists('subjects', $r['subject_id'])) continue;
+            $room = $r['room_id'] && $exists('rooms', $r['room_id']) ? $r['room_id'] : null;
+            $st->execute([$r['id'], $r['class_id'], $r['teacher_id'], $r['subject_id'], $room,
+                $r['group_name'], $r['day_of_week'], $r['period_no'], $r['locked'], $r['created_at']]);
+        }
+        $pdo->prepare("DELETE FROM undo_log WHERE id = ?")->execute([$last['id']]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+    return $last['label'];
+}
+
+function undo_peek($pdo) {
+    $r = q1($pdo, "SELECT label, created_at FROM undo_log ORDER BY id DESC LIMIT 1");
+    return $r ? $r + ['count' => (int) q1($pdo, "SELECT COUNT(*) c FROM undo_log")['c']] : null;
 }
 
 // --- یارمەتیدەرەکان ---

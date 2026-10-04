@@ -78,4 +78,66 @@ CREATE TABLE IF NOT EXISTS undo_log (
 );
 SQL,
 
+// ---------- ٣: ڕێگرییە نەرمەکان، وانەی هاوبەش، پەیوەندی بابەت، جێگرەوە ----------
+<<<'SQL'
+-- سنوورەکانی مامۆستا (NULL = بێ سنوور / ڕێکخستنی گشتی)
+ALTER TABLE teachers ADD COLUMN max_per_day INTEGER;
+ALTER TABLE teachers ADD COLUMN min_per_day INTEGER;
+ALTER TABLE teachers ADD COLUMN max_gaps INTEGER;
+
+-- کاتی باشتر بۆ بابەت: any | early | late
+ALTER TABLE subjects ADD COLUMN time_pref TEXT NOT NULL DEFAULT 'any';
+
+-- وانەی هاوبەش: ئەو بابەتانەی پرۆگرام کە هەمان joint_group یان هەیە، پێکەوە دەوترێنەوە
+ALTER TABLE class_subjects ADD COLUMN joint_group TEXT NOT NULL DEFAULT '';
+
+-- پەیوەندی نێوان بابەتەکان بۆ هەر پۆلێک: not_same_day | consecutive
+CREATE TABLE subject_relations (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject_a INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+    subject_b INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+    kind      TEXT NOT NULL,
+    UNIQUE (subject_a, subject_b, kind)
+);
+
+-- خشتە: UNIQUE ی مامۆستا لادەبرێت چونکە وانەی هاوبەش یەک مامۆستا لە چەند پۆلێکدا
+-- لە یەک کاتدا دادەنێت (لە کۆددا پشکنین دەکرێت)
+CREATE TABLE timetable_v3 (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    class_id    INTEGER NOT NULL REFERENCES classes(id)  ON DELETE CASCADE,
+    teacher_id  INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+    subject_id  INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+    room_id     INTEGER REFERENCES rooms(id) ON DELETE SET NULL,
+    group_name  TEXT NOT NULL DEFAULT '',
+    joint_group TEXT NOT NULL DEFAULT '',
+    day_of_week INTEGER NOT NULL,
+    period_no   INTEGER NOT NULL,
+    locked      INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT DEFAULT CURRENT_TIMESTAMP
+);
+INSERT INTO timetable_v3 (id, class_id, teacher_id, subject_id, room_id, group_name,
+                          day_of_week, period_no, locked, created_at)
+    SELECT id, class_id, teacher_id, subject_id, room_id, group_name,
+           day_of_week, period_no, locked, created_at FROM timetable;
+DROP TABLE timetable;
+ALTER TABLE timetable_v3 RENAME TO timetable;
+CREATE INDEX idx_tt_class   ON timetable (class_id, day_of_week, period_no);
+CREATE INDEX idx_tt_teacher ON timetable (teacher_id, day_of_week, period_no);
+CREATE INDEX idx_tt_room    ON timetable (room_id, day_of_week, period_no);
+
+-- مامۆستای جێگرەوە بۆ ڕۆژێکی دیاریکراو (سەربەخۆیە لە ناسنامەی ڕیزەکانی خشتە)
+CREATE TABLE substitutions (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    sub_date      TEXT NOT NULL,
+    day_of_week   INTEGER NOT NULL,
+    period_no     INTEGER NOT NULL,
+    class_id      INTEGER NOT NULL REFERENCES classes(id)  ON DELETE CASCADE,
+    subject_id    INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+    absent_id     INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+    substitute_id INTEGER REFERENCES teachers(id) ON DELETE SET NULL,
+    note          TEXT NOT NULL DEFAULT '',
+    UNIQUE (sub_date, period_no, class_id, absent_id)
+);
+SQL,
+
 ];

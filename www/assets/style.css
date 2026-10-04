@@ -184,3 +184,21 @@ table.grid tr.total td{font-weight:700;background:#F6F8F6}
 }
 input[hidden]{display:none !important}
 .card label.btn{display:inline-block;margin:0}
+
+/* ---------- ڕێگری، کوالێتی، جێگرەوە ---------- */
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.row3 label{font-size:12px}
+.small-select{padding:4px 6px;font-size:13px}
+.joint-tag{font-size:11px;color:#6A1B9A;font-weight:400}
+.joint-info{background:#F3E5F5;color:#6A1B9A;border:1px solid #E1BEE7;padding:8px 12px;border-radius:8px;margin-top:12px;font-size:13px}
+.pbar{height:6px;background:#FFE082;border-radius:999px;margin-top:6px;overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--warn);transition:width .3s}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.stats div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center}
+.stats b{display:block;font-size:26px;color:var(--primary)}
+.stats span{font-size:12px;color:var(--muted)}
+table.compact{margin:10px 0}
+table.compact th,table.compact td{padding:6px 10px}
+details{margin:8px 0}
+summary{cursor:pointer;color:var(--primary);font-weight:700}
+.card label.inline select{margin-right:auto}

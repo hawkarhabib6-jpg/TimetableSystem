@@ -6,9 +6,10 @@
 require_once __DIR__ . '/../includes/logic.php';
 require_once __DIR__ . '/../includes/generator.php';
 require_once __DIR__ . '/../includes/backup.php';
+require_once __DIR__ . '/../includes/extras.php';
 
 $action = $_GET['action'] ?? '';
-$b = in_array($action, ['backup_upload'], true) ? [] : body_json();
+$b = in_array($action, ['backup_upload', 'import_asc', 'import_csv'], true) ? [] : body_json();
 
 /** پاککردنەوەی خانەیەکی وانە لە داواکارییەکەوە. */
 function lesson_from($b) {
@@ -18,6 +19,7 @@ function lesson_from($b) {
         'subject_id'  => (int) ($b['subject_id'] ?? 0),
         'room_id'     => !empty($b['room_id']) ? (int) $b['room_id'] : null,
         'group_name'  => trim($b['group_name'] ?? ''),
+        'joint_group' => trim($b['joint_group'] ?? ''),
         'day_of_week' => (int) ($b['day_of_week'] ?? -1),
         'period_no'   => (int) ($b['period_no'] ?? 0),
     ];
@@ -39,6 +41,22 @@ function lesson_warnings($pdo, $l, $extra = 0) {
     $teaches = q1($pdo, "SELECT 1 FROM teacher_subjects WHERE teacher_id = ? AND subject_id = ?",
         [$l['teacher_id'], $l['subject_id']]);
     if ($hasList && !$teaches) $w[] = 'ئەم بابەتە لە لیستی بابەتەکانی ئەم مامۆستایەدا نییە.';
+    // سنووری ڕۆژانە و وانەی بەدوای یەکدا
+    $tt = q1($pdo, "SELECT max_per_day FROM teachers WHERE id = ?", [$l['teacher_id']]);
+    $slots = array_map('intval', array_column(q($pdo, "SELECT DISTINCT period_no FROM timetable
+              WHERE teacher_id = ? AND day_of_week = ?", [$l['teacher_id'], $l['day_of_week']]), 'period_no'));
+    for ($k = 0; $k < max(1, $extra); $k++) $slots[] = $l['period_no'] + $k;
+    $slots = array_unique($slots);
+    if ($tt && $tt['max_per_day'] && count($slots) > (int) $tt['max_per_day']) {
+        $w[] = "ئەم مامۆستایە لەم ڕۆژەدا " . count($slots) . " وانەی دەبێت (زۆرترین {$tt['max_per_day']}).";
+    }
+    $maxCons = cfg_constraints($pdo)['max_consecutive'];
+    if ($maxCons) {
+        $set = array_flip($slots);
+        $lo = $l['period_no']; while (isset($set[$lo - 1])) $lo--;
+        $hi = $l['period_no']; while (isset($set[$hi + 1])) $hi++;
+        if ($hi - $lo + 1 > $maxCons) $w[] = ($hi - $lo + 1) . " وانەی بەدوای یەکدا (زۆرترین {$maxCons}).";
+    }
     return $w ? 'ئاگاداری: ' . implode(' ', $w) : null;
 }
 function save_teacher_subjects($pdo, $tid, $ids) {
@@ -71,6 +89,15 @@ switch ($action) {
         set_setting($pdo, 'period_times', json_encode($times, JSON_UNESCAPED_UNICODE));
         json_out(['ok' => true, 'data' => cfg_all($pdo)]);
 
+    case 'constraints_get':
+        json_out(['ok' => true, 'data' => cfg_constraints($pdo)]);
+
+    case 'constraints_save':
+        $c = [];
+        foreach (CONSTRAINT_DEFAULTS as $k => $v) $c[$k] = max(0, min(12, (int) ($b[$k] ?? $v)));
+        set_setting($pdo, 'constraints', json_encode($c));
+        json_out(['ok' => true, 'data' => $c]);
+
     // ---------- مامۆستایان ----------
     case 'teachers_list':
         json_out(['ok' => true, 'data' => teachers_with_load($pdo)]);
@@ -81,14 +108,17 @@ switch ($action) {
         $max = (int) ($b['max_periods'] ?? 22);
         if ($max < 1 || $max > 60) fail('میلاک دەبێت لە ١ تا ٦٠ بێت.');
         $phone = trim($b['phone'] ?? '');
+        $opt = fn($k) => isset($b[$k]) && $b[$k] !== '' && $b[$k] !== null ? max(0, (int) $b[$k]) : null;
+        $limits = [$opt('max_per_day') ?: null, $opt('min_per_day') ?: null, $opt('max_gaps')];
+        if ($limits[0] && $limits[1] && $limits[1] > $limits[0]) fail('کەمترین وانەی ڕۆژانە لە زۆرترین زیاترە.');
         if ($action === 'teacher_add') {
-            $pdo->prepare("INSERT INTO teachers (full_name, phone, max_periods) VALUES (?,?,?)")
-                ->execute([$name, $phone, $max]);
+            $pdo->prepare("INSERT INTO teachers (full_name, phone, max_periods, max_per_day, min_per_day, max_gaps)
+                           VALUES (?,?,?,?,?,?)")->execute([$name, $phone, $max, ...$limits]);
             $id = (int) $pdo->lastInsertId();
         } else {
             $id = (int) $b['id'];
-            $pdo->prepare("UPDATE teachers SET full_name=?, phone=?, max_periods=? WHERE id=?")
-                ->execute([$name, $phone, $max, $id]);
+            $pdo->prepare("UPDATE teachers SET full_name=?, phone=?, max_periods=?, max_per_day=?, min_per_day=?,
+                           max_gaps=? WHERE id=?")->execute([$name, $phone, $max, ...$limits, $id]);
         }
         if (isset($b['subject_ids'])) save_teacher_subjects($pdo, $id, $b['subject_ids']);
         json_out(['ok' => true, 'id' => $id]);
@@ -107,8 +137,25 @@ switch ($action) {
         json_out(['ok' => true, 'id' => $pdo->lastInsertId()]);
 
     case 'subject_update':
-        $pdo->prepare("UPDATE subjects SET name=? WHERE id=?")
-            ->execute([require_name($b['name'] ?? '', 'بابەت'), (int) $b['id']]);
+        $pref = in_array($b['time_pref'] ?? 'any', ['any', 'early', 'late'], true) ? ($b['time_pref'] ?? 'any') : 'any';
+        $pdo->prepare("UPDATE subjects SET name=?, time_pref=? WHERE id=?")
+            ->execute([require_name($b['name'] ?? '', 'بابەت'), $pref, (int) $b['id']]);
+        json_out(['ok' => true]);
+
+    case 'relations_list':
+        json_out(['ok' => true, 'data' => q($pdo, "SELECT r.*, a.name a_name, b.name b_name FROM subject_relations r
+            JOIN subjects a ON a.id = r.subject_a JOIN subjects b ON b.id = r.subject_b ORDER BY a.name")]);
+
+    case 'relation_add':
+        $a = (int) $b['subject_a']; $c = (int) $b['subject_b'];
+        if (!$a || !$c || $a === $c) fail('دوو بابەتی جیاواز هەڵبژێرە.');
+        if (!in_array($b['kind'] ?? '', ['not_same_day', 'consecutive'], true)) fail('جۆری پەیوەندی هەڵەیە.');
+        $pdo->prepare("INSERT OR IGNORE INTO subject_relations (subject_a, subject_b, kind) VALUES (?,?,?)")
+            ->execute([min($a, $c), max($a, $c), $b['kind']]);
+        json_out(['ok' => true]);
+
+    case 'relation_delete':
+        $pdo->prepare("DELETE FROM subject_relations WHERE id=?")->execute([(int) $b['id']]);
         json_out(['ok' => true]);
 
     case 'subject_delete':
@@ -162,16 +209,25 @@ switch ($action) {
         $dbl = (int) ($b['double_count'] ?? 0);
         if ($ppw < 1 || $ppw > 40) fail('ژمارەی وانەی هەفتانە دەبێت لە ١ تا ٤٠ بێت.');
         if ($dbl < 0 || $dbl * 2 > $ppw) fail('ژمارەی وانە دووانییەکان زۆرە بەراورد بە کۆی وانەکان.');
+        $joint = trim($b['joint_group'] ?? '');
         $vals = [(int) $b['class_id'], (int) $b['subject_id'], ((int) ($b['teacher_id'] ?? 0)) ?: null,
-                 ((int) ($b['room_id'] ?? 0)) ?: null, trim($b['group_name'] ?? ''), $ppw, $dbl];
+                 ((int) ($b['room_id'] ?? 0)) ?: null, trim($b['group_name'] ?? ''), $ppw, $dbl, $joint];
+        if ($joint !== '') {
+            // هەموو بەشەکانی وانەیەکی هاوبەش دەبێت هەمان بابەت و ژمارەی وانەیان هەبێت
+            $other = q1($pdo, "SELECT subject_id, periods_per_week FROM class_subjects WHERE joint_group = ? AND id <> ?",
+                [$joint, (int) ($b['id'] ?? 0)]);
+            if ($other && ((int) $other['subject_id'] !== $vals[1] || (int) $other['periods_per_week'] !== $ppw)) {
+                fail("وانەی هاوبەشی «{$joint}» بابەت یان ژمارەی وانەی جیاوازی هەیە لە پۆلەکانی تردا.");
+            }
+        }
         try {
             if (!empty($b['id'])) {
                 $pdo->prepare("UPDATE class_subjects SET class_id=?, subject_id=?, teacher_id=?, room_id=?,
-                               group_name=?, periods_per_week=?, double_count=? WHERE id=?")
+                               group_name=?, periods_per_week=?, double_count=?, joint_group=? WHERE id=?")
                     ->execute([...$vals, (int) $b['id']]);
             } else {
                 $pdo->prepare("INSERT INTO class_subjects (class_id, subject_id, teacher_id, room_id,
-                               group_name, periods_per_week, double_count) VALUES (?,?,?,?,?,?,?)")
+                               group_name, periods_per_week, double_count, joint_group) VALUES (?,?,?,?,?,?,?,?)")
                     ->execute($vals);
             }
         } catch (PDOException $e) {
@@ -249,18 +305,32 @@ switch ($action) {
         $l = lesson_from($b);
         if (!$l['class_id'] || !$l['teacher_id'] || !$l['subject_id']) fail('پۆل، بابەت و مامۆستا هەڵبژێرە.');
         $len = !empty($b['double']) ? 2 : 1;
-        for ($k = 0; $k < $len; $k++) {
-            $c = check_conflicts($pdo, ['period_no' => $l['period_no'] + $k] + $l);
-            if ($c) fail($len > 1 ? "بەشە وانەی " . ($l['period_no'] + $k) . ": $c" : $c);
+        // وانەی هاوبەش: بۆ هەموو پۆلەکانی هەمان joint_group دادەنرێت
+        $targets = [[$l['class_id'], $l['group_name']]];
+        if ($l['joint_group'] !== '') {
+            $targets = array_map(fn($r) => [(int) $r['class_id'], $r['group_name']],
+                q($pdo, "SELECT class_id, group_name FROM class_subjects WHERE joint_group = ?", [$l['joint_group']]));
+            if (!$targets) $targets = [[$l['class_id'], $l['group_name']]];
+        }
+        foreach ($targets as [$cid, $grp]) {
+            for ($k = 0; $k < $len; $k++) {
+                $c = check_conflicts($pdo, ['period_no' => $l['period_no'] + $k, 'class_id' => $cid, 'group_name' => $grp] + $l);
+                if ($c && count($targets) > 1) {
+                    $c = 'پۆلی «' . q1($pdo, "SELECT name FROM classes WHERE id = ?", [$cid])['name'] . '»: ' . $c;
+                }
+                if ($c) fail(($len > 1 ? "بەشە وانەی " . ($l['period_no'] + $k) . ": " : '') . $c);
+            }
         }
         $warning = lesson_warnings($pdo, $l, $len);
         undo_push($pdo, 'دانانی وانە');
-        $st = $pdo->prepare("INSERT INTO timetable (class_id, teacher_id, subject_id, room_id, group_name,
-                             day_of_week, period_no, locked) VALUES (?,?,?,?,?,?,?,?)");
+        $st = $pdo->prepare("INSERT INTO timetable (class_id, teacher_id, subject_id, room_id, group_name, joint_group,
+                             day_of_week, period_no, locked) VALUES (?,?,?,?,?,?,?,?,?)");
         $pdo->beginTransaction();
-        for ($k = 0; $k < $len; $k++) {
-            $st->execute([$l['class_id'], $l['teacher_id'], $l['subject_id'], $l['room_id'], $l['group_name'],
-                          $l['day_of_week'], $l['period_no'] + $k, isset($b['locked']) ? (int) !!$b['locked'] : 1]);
+        foreach ($targets as [$cid, $grp]) {
+            for ($k = 0; $k < $len; $k++) {
+                $st->execute([$cid, $l['teacher_id'], $l['subject_id'], $l['room_id'], $grp, $l['joint_group'],
+                              $l['day_of_week'], $l['period_no'] + $k, isset($b['locked']) ? (int) !!$b['locked'] : 1]);
+            }
         }
         $pdo->commit();
         json_out(['ok' => true, 'warning' => $warning]);
@@ -271,6 +341,20 @@ switch ($action) {
         $old = q1($pdo, "SELECT * FROM timetable WHERE id = ?", [$id]);
         if (!$old) fail('ئەم وانەیە نەدۆزرایەوە.');
         $l = lesson_from(array_merge($old, array_intersect_key($b, $old)));
+        $moving = $l['day_of_week'] != $old['day_of_week'] || $l['period_no'] != $old['period_no'];
+        if ($old['joint_group'] !== '' && $moving) {
+            // وانەی هاوبەش: هەموو پۆلەکان پێکەوە دەگوازرێنەوە
+            $sibs = lesson_siblings($pdo, $old);
+            $ids = array_map('intval', array_column($sibs, 'id'));
+            foreach ($sibs as $s) {
+                $e = check_conflicts($pdo, ['day_of_week' => $l['day_of_week'], 'period_no' => $l['period_no']] + $s, $ids);
+                if ($e) fail($e);
+            }
+            undo_push($pdo, 'گواستنەوەی وانەی هاوبەش');
+            $pdo->prepare("UPDATE timetable SET day_of_week=?, period_no=?, locked=1 WHERE id IN (" . implode(',', $ids) . ")")
+                ->execute([$l['day_of_week'], $l['period_no']]);
+            json_out(['ok' => true, 'warning' => null]);
+        }
         if ($c = check_conflicts($pdo, $l, [$id])) fail($c);
         $warning = $l['teacher_id'] != $old['teacher_id'] ? lesson_warnings($pdo, $l, 1) : null;
         undo_push($pdo, isset($b['day_of_week']) ? 'گواستنەوەی وانە' : 'دەستکاریکردنی وانە');
@@ -287,6 +371,9 @@ switch ($action) {
         $a = q1($pdo, "SELECT * FROM timetable WHERE id = ?", [(int) $b['id_a']]);
         $c = q1($pdo, "SELECT * FROM timetable WHERE id = ?", [(int) $b['id_b']]);
         if (!$a || !$c) fail('وانەکە نەدۆزرایەوە.');
+        if ($a['joint_group'] !== '' || $c['joint_group'] !== '') {
+            fail('وانەی هاوبەش ئاڵوگۆڕ ناکرێت — بیگوازەوە بۆ خانەیەکی بەتاڵ.');
+        }
         $ignore = [$a['id'], $c['id']];
         $na = array_merge($a, ['day_of_week' => $c['day_of_week'], 'period_no' => $c['period_no']]);
         $nc = array_merge($c, ['day_of_week' => $a['day_of_week'], 'period_no' => $a['period_no']]);
@@ -306,8 +393,11 @@ switch ($action) {
         json_out(['ok' => true]);
 
     case 'timetable_remove':
+        $row = q1($pdo, "SELECT * FROM timetable WHERE id = ?", [(int) $b['id']]);
+        if (!$row) fail('ئەم وانەیە نەدۆزرایەوە.');
         undo_push($pdo, 'سڕینەوەی وانە');
-        $pdo->prepare("DELETE FROM timetable WHERE id=?")->execute([(int) $b['id']]);
+        $ids = array_map('intval', array_column(lesson_siblings($pdo, $row), 'id'));
+        $pdo->exec("DELETE FROM timetable WHERE id IN (" . implode(',', $ids) . ")");
         json_out(['ok' => true]);
 
     case 'timetable_clear':
@@ -322,8 +412,9 @@ switch ($action) {
         json_out(['ok' => true, 'deleted' => $st->rowCount()]);
 
     case 'timetable_generate':
-        @set_time_limit(120);
-        $res = generate_timetable($pdo, !empty($b['regenerate']), 8.0);
+        $seconds = max(3, min(120, (int) ($b['seconds'] ?? 10)));
+        @set_time_limit($seconds + 60);
+        $res = generate_timetable($pdo, !empty($b['regenerate']), $seconds);
         json_out(['ok' => true, 'data' => $res]);
 
     // ---------- گەڕانەوە ----------
@@ -345,6 +436,38 @@ switch ($action) {
 
     case 'validate':
         json_out(['ok' => true, 'data' => validate_all($pdo)]);
+
+    case 'quality':
+        json_out(['ok' => true, 'data' => quality_report($pdo)]);
+
+    // ---------- هێنان (Import) ----------
+    case 'import_asc':
+        json_out(['ok' => true, 'data' => import_asc_xml($pdo, $_FILES['file'] ?? null, !empty($_POST['with_cards']))]);
+
+    case 'import_csv':
+        json_out(['ok' => true, 'data' => import_curriculum_csv($pdo, $_FILES['file'] ?? null)]);
+
+    case 'csv_template':
+        csv_template();
+
+    // ---------- مامۆستای جێگرەوە ----------
+    case 'subs_day':
+        json_out(['ok' => true, 'data' => substitution_day($pdo, $_GET['date'] ?? '', (int) ($_GET['teacher_id'] ?? 0))]);
+
+    case 'subs_save':
+        substitution_save($pdo, $b);
+        json_out(['ok' => true]);
+
+    case 'subs_delete':
+        $pdo->prepare("DELETE FROM substitutions WHERE id=?")->execute([(int) $b['id']]);
+        json_out(['ok' => true]);
+
+    case 'subs_list':
+        json_out(['ok' => true, 'data' => substitution_list($pdo, $_GET['date'] ?? '')]);
+
+    // ---------- بڵاوکردنەوە بۆ مۆبایل ----------
+    case 'publish_html':
+        publish_html($pdo);
 
     case 'export_csv':
         export_csv($pdo, $_GET['view'] ?? 'class');

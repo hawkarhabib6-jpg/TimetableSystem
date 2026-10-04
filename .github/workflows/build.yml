@@ -35,20 +35,65 @@ jobs:
           Rename-Item "$root\phpdesktop-chrome.exe" "TimetableSystem.exe"
           New-Item -ItemType Directory -Force -Path "$root\www\tmp" | Out-Null
 
-      - name: Create portable ZIP
+      # وەشانی «هەموو ویندۆزەکان»: PHP 8.2 ی 32-bit (دواهەمین وەشان کە ویندۆز 7 پشتگیری دەکات)
+      # لەسەر ویندۆز 7، 8، 10، 11 ی 32-bit و 64-bit کار دەکات
+      - name: Assemble All-Windows edition (32-bit)
         shell: pwsh
         run: |
-          $root = $env:PHPDESKTOP_DIR
-          Compress-Archive -Path "$root\*" -DestinationPath "TimetableSystem-Portable.zip" -Force
+          $rel = Invoke-RestMethod "https://windows.php.net/downloads/releases/releases.json"
+          $key = ($rel.'8.2'.PSObject.Properties.Name | Where-Object { $_ -like 'nts-vs*-x86' } | Select-Object -First 1)
+          $zip = $rel.'8.2'.$key.zip.path
+          Write-Host "PHP: $zip"
+          Invoke-WebRequest "https://windows.php.net/downloads/releases/$zip" -OutFile php82.zip
+          $u = Join-Path $PWD "universal\TimetableSystem"
+          New-Item -ItemType Directory -Force -Path "$u\php" | Out-Null
+          Expand-Archive php82.zip "$u\php" -Force
+          # VC++ runtime (x86) لە تەنیشت php.exe بۆ ئەوەی پێویستی بە دامەزراندنی جیا نەبێت
+          Copy-Item C:\Windows\SysWOW64\vcruntime140.dll "$u\php\" -Force
+          Copy-Item -Recurse www "$u\www"
+          New-Item -ItemType Directory -Force -Path "$u\www\tmp" | Out-Null
+          Copy-Item packaging\php.ini "$u\php\php.ini" -Force
+          Copy-Item packaging\start.vbs, packaging\stop.vbs, packaging\README-AllWindows.txt "$u\"
+          "UNIVERSAL_DIR=$u" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
+      # تاقیکردنەوەی ڕاستەقینە لەسەر ویندۆز: هەردوو وەشان PHP و SQLite بەکاردەهێنن؟
+      - name: Smoke test both editions
+        shell: pwsh
+        run: |
+          $u = $env:UNIVERSAL_DIR
+          & "$u\php\php.exe" -c "$u\php\php.ini" -d "extension_dir=$u\php\ext" -r "echo PHP_VERSION, ' ', PHP_INT_SIZE*8, '-bit ', (new PDO('sqlite::memory:'))->query('select sqlite_version()')->fetchColumn(), PHP_EOL;"
+          if ($LASTEXITCODE) { throw "32-bit PHP failed" }
+          $p = Start-Process -PassThru -WindowStyle Hidden -WorkingDirectory "$u\php" "$u\php\php.exe" -ArgumentList "-c","`"$u\php\php.ini`"","-S","127.0.0.1:47821","-t","`"$u\www`""
+          Start-Sleep 3
+          $r = Invoke-RestMethod "http://127.0.0.1:47821/api/index.php?action=settings_get"
+          if (-not $r.ok) { throw "All-Windows edition API failed: $($r | ConvertTo-Json)" }
+          $h = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:47821/"
+          if ($h.Content -notmatch 'tab-timetable') { throw "index page failed" }
+          Stop-Process $p -Force
+          Remove-Item "$u\timetable.db", "$u\backups" -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host "All-Windows edition OK"
+          $m = $env:PHPDESKTOP_DIR
+          Push-Location "$m\php"
+          .\php.exe -c php.ini -r "echo PHP_VERSION, ' ', PHP_INT_SIZE*8, '-bit ', (new PDO('sqlite::memory:'))->query('select sqlite_version()')->fetchColumn(), PHP_EOL;"
+          if ($LASTEXITCODE) { throw "PHP Desktop PHP failed" }
+          Pop-Location
+          Write-Host "Modern edition PHP OK"
+
+      - name: Create portable ZIPs
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "$env:PHPDESKTOP_DIR\*" -DestinationPath "TimetableSystem-Portable-Win10-64bit.zip" -Force
+          Compress-Archive -Path "$env:UNIVERSAL_DIR" -DestinationPath "TimetableSystem-Portable-AllWindows.zip" -Force
+
+      # Inno Setup 6.2.2: دامەزرێنەرەکەی لەسەر ویندۆز 7 یش کار دەکات
       - name: Install Inno Setup
         shell: pwsh
-        run: choco install innosetup -y --no-progress
+        run: choco install innosetup --version=6.2.2 -y --no-progress --allow-downgrade
 
       - name: Build installer
         shell: pwsh
         run: |
-          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '2.0.0' }
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '3.0.0' }
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" installer.iss
 
       - name: Upload artifacts
@@ -57,7 +102,8 @@ jobs:
           name: TimetableSystem-Windows
           path: |
             TimetableSystem-Setup.exe
-            TimetableSystem-Portable.zip
+            TimetableSystem-Portable-Win10-64bit.zip
+            TimetableSystem-Portable-AllWindows.zip
 
       # فایلەکان ناچنە ناو ڕیپۆ (ڕیپۆ گەورە دەکەن)؛ لە جیاتی ئەوە:
       # - هەر push ـێک: لە بەشی Actions وەک artifact دادەگیرێن
@@ -68,4 +114,5 @@ jobs:
         with:
           files: |
             TimetableSystem-Setup.exe
-            TimetableSystem-Portable.zip
+            TimetableSystem-Portable-Win10-64bit.zip
+            TimetableSystem-Portable-AllWindows.zip

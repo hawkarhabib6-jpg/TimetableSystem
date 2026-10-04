@@ -21,6 +21,7 @@ $school = setting($pdo, 'school_name', '');
         <button class="tab" data-tab="subjects">بابەتەکان</button>
         <button class="tab" data-tab="classes">پۆلەکان و پرۆگرام</button>
         <button class="tab" data-tab="rooms">ژوورەکان</button>
+        <button class="tab" data-tab="subs">مامۆستای جێگرەوە</button>
         <button class="tab" data-tab="report">ڕاپۆرت و پشکنین</button>
         <button class="tab" data-tab="settings">ڕێکخستن و پاڵپشتی</button>
     </nav>
@@ -44,6 +45,7 @@ $school = setting($pdo, 'school_name', '');
             <button id="btnUndo" class="ghost" disabled>↶ گەڕانەوە</button>
             <button id="btnPrint" class="ghost">🖨 چاپ / PDF</button>
             <button id="btnExport" class="ghost">⬇ Excel</button>
+            <button id="btnPublish" class="ghost" title="فایلێک بۆ مۆبایل کە بە WhatsApp/Telegram دەنێردرێت">📱 مۆبایل</button>
             <button id="btnClear" class="ghost danger-text">🧹 پاککردنەوە</button>
         </div>
         <div id="ttProgress" class="progress hidden"></div>
@@ -82,6 +84,21 @@ $school = setting($pdo, 'school_name', '');
             <button id="btnAddSubject">زیادکردن</button>
         </div>
         <table id="sTable" class="grid"></table>
+
+        <div class="card" style="margin-top:18px">
+            <h3>پەیوەندی نێوان بابەتەکان</h3>
+            <p class="hint">بۆ هەر پۆلێک جێبەجێ دەکرێت. نموونە: فیزیا و کیمیا لە یەک ڕۆژدا نەبن، یان مێژوو و جوگرافیا بەدوای یەکدا بن.</p>
+            <div class="form-row">
+                <select id="relA"></select>
+                <select id="relKind">
+                    <option value="not_same_day">لە یەک ڕۆژدا نەبن</option>
+                    <option value="consecutive">بەدوای یەکدا بن (ئەگەر لە یەک ڕۆژدا بوون)</option>
+                </select>
+                <select id="relB"></select>
+                <button id="btnAddRel">زیادکردن</button>
+            </div>
+            <div id="relList" class="off-list"></div>
+        </div>
     </section>
 
     <!-- ============ پۆلەکان و پرۆگرامی خوێندن ============ -->
@@ -116,8 +133,25 @@ $school = setting($pdo, 'school_name', '');
         <table id="rmTable" class="grid"></table>
     </section>
 
+    <!-- ============ مامۆستای جێگرەوە ============ -->
+    <section id="tab-subs" class="panel">
+        <div class="form-row">
+            <label>ڕێکەوت: <input type="date" id="subDate"></label>
+            <label>مامۆستای ئامادەنەبوو: <select id="subTeacher"></select></label>
+            <button id="btnSubLoad">پیشاندان</button>
+            <span class="spacer"></span>
+            <button class="ghost" id="btnSubPrint">🖨 چاپی جێگرەوەکانی ئەم ڕۆژە</button>
+        </div>
+        <p class="hint">بۆ هەر وانەیەک، مامۆستا بەردەستەکان پیشان دەدرێن: ئەوانەی هەمان بابەت دەڵێنەوە یەکەم، پاشان ئەوانەی ئەمڕۆ کەمتر سەرقاڵن.</p>
+        <div id="subBox"></div>
+        <h2>هەموو جێگرەوەکانی ئەم ڕۆژە</h2>
+        <table id="subList" class="grid"></table>
+    </section>
+
     <!-- ============ ڕاپۆرت ============ -->
     <section id="tab-report" class="panel">
+        <h2>کوالێتی خشتە</h2>
+        <div id="qualityBox"></div>
         <h2>پشکنینی خشتە</h2>
         <div id="validateBox" class="issues"></div>
         <h2>میلاکی مامۆستایان</h2>
@@ -149,6 +183,27 @@ $school = setting($pdo, 'school_name', '');
                 </div>
                 <table id="bTable" class="grid"></table>
             </div>
+            <div class="card">
+                <h3>ڕێگرییەکانی دروستکردنی خشتە</h3>
+                <p class="hint">ئەمانە بۆ دروستکەری ئۆتۆماتیکین. «گرنگی» دیاری دەکات دروستکەرەکە چەندە هەوڵ دەدات جێبەجێیان بکات.</p>
+                <label>زۆرترین بۆشایی مامۆستا لە ڕۆژێکدا (بنەڕەت)<input id="cMaxGaps" type="number" min="0" max="6"></label>
+                <label>زۆرترین وانەی بەدوای یەکدا بۆ مامۆستا (0 = بێ سنوور، ڕێگری سەختە)<input id="cMaxCons" type="number" min="0" max="12"></label>
+                <div id="cWeights" class="stack"></div>
+                <button id="btnSaveCons" class="primary">پاشەکەوتکردن</button>
+            </div>
+            <div class="card">
+                <h3>هێنانی داتا</h3>
+                <p class="hint"><b>لە aSc TimeTables:</b> لە aSc ـدا File ← Export ← <b>aSc XML</b> بکە، پاشان فایلەکە لێرە باربکە.
+                    ⚠ هەموو داتای ئێستا دەگۆڕدرێت (پێشتر پاڵپشتی دەگیرێت).</p>
+                <label class="check"><input type="checkbox" id="ascCards" checked> خشتە ئامادەکراوەکەش بهێنە (نەک تەنها پرۆگرام)</label>
+                <label class="btn ghost">⬆ هێنان لە aSc (XML)<input type="file" id="ascFile" accept=".xml" hidden></label>
+                <p class="hint" style="margin-top:14px"><b>لە Excel:</b> پرۆگرامی خوێندن (پۆل، بابەت، مامۆستا، ژمارەی وانە...) لە Excel پڕ بکەرەوە
+                    و وەک <b>CSV UTF-8</b> پاشەکەوتی بکە. داتای ئێستا ناسڕێتەوە.</p>
+                <div class="form-row">
+                    <a class="btn ghost" href="api/index.php?action=csv_template">⬇ نموونەی فایل</a>
+                    <label class="btn ghost">⬆ هێنان لە Excel (CSV)<input type="file" id="csvFile" accept=".csv,.txt" hidden></label>
+                </div>
+            </div>
         </div>
     </section>
 </main>
@@ -163,6 +218,7 @@ $school = setting($pdo, 'school_name', '');
             <label>گرووپ (ئارەزوومەندانە):<input id="lsGroup" placeholder="بۆ نموونە: کوڕان"></label>
             <label>ژوور:<select id="lsRoom"></select></label>
         </div>
+        <div id="lsJointInfo" class="joint-info hidden"></div>
         <button id="btnSuggest" class="info">پێشنیاری ئۆتۆماتیکی مامۆستا</button>
         <div id="suggestBox" class="suggest-box"></div>
         <label>مامۆستا:<select id="lsTeacher"></select></label>

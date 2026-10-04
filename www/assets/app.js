@@ -103,7 +103,8 @@ document.querySelectorAll('.tab').forEach(btn=>{
     btn.classList.add('active');
     $('tab-'+btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab==='report') loadReport();
-    if (btn.dataset.tab==='settings') { fillSettings(); loadBackups(); }
+    if (btn.dataset.tab==='settings') { fillSettings(); loadBackups(); loadConstraints(); }
+    if (btn.dataset.tab==='subs') initSubs();
     if (btn.dataset.tab==='timetable') renderTimetable();
   };
 });
@@ -228,7 +229,7 @@ $('tTable').onclick = async e=>{
   }
 };
 function teacherForm(t){
-  t = t || { full_name:'', phone:'', max_periods:22, subject_ids:[] };
+  t = t || { full_name:'', phone:'', max_periods:22, subject_ids:[], max_per_day:'', min_per_day:'', max_gaps:'' };
   const subj = CACHE.subjects.map(s=>`<label class="chip-check">
       <input type="checkbox" value="${s.id}" ${t.subject_ids.includes(Number(s.id))?'checked':''}> ${esc(s.name)}</label>`).join('')
     || '<span class="hint">سەرەتا بابەت زیاد بکە.</span>';
@@ -236,11 +237,17 @@ function teacherForm(t){
     <label>ناوی مامۆستا<input id="fName" value="${esc(t.full_name)}"></label>
     <label>ژمارەی مۆبایل (ئارەزوومەندانە)<input id="fPhone" value="${esc(t.phone)}"></label>
     <label>میلاک (زۆرترین بەشە وانە لە هەفتەیەکدا)<input id="fMax" type="number" min="1" max="60" value="${t.max_periods}"></label>
+    <div class="row3">
+      <label>زۆرترین وانە لە ڕۆژێکدا<input id="fMaxDay" type="number" min="1" max="12" value="${t.max_per_day??''}" placeholder="بێ سنوور"></label>
+      <label>کەمترین وانە (ئەگەر هات)<input id="fMinDay" type="number" min="1" max="12" value="${t.min_per_day??''}" placeholder="—"></label>
+      <label>زۆرترین بۆشایی ڕۆژانە<input id="fGaps" type="number" min="0" max="6" value="${t.max_gaps??''}" placeholder="گشتی"></label>
+    </div>
     <label>ئەو بابەتانەی دەیڵێتەوە:</label><div class="chips" id="fSubj">${subj}</div>`,
   async ()=>{
     await api(t.id ? 'teacher_update' : 'teacher_add', {
       id: t.id, full_name: $('fName').value, phone: $('fPhone').value,
       max_periods: parseInt($('fMax').value),
+      max_per_day: $('fMaxDay').value, min_per_day: $('fMinDay').value, max_gaps: $('fGaps').value,
       subject_ids: [...document.querySelectorAll('#fSubj input:checked')].map(i=>Number(i.value)),
     });
     await loadTeachers();
@@ -287,15 +294,39 @@ $('btnAddOff').onclick = async ()=>{
 // ============ بابەتەکان ============
 async function loadSubjects(){
   CACHE.subjects = (await api('subjects_list')).data;
-  $('sTable').innerHTML = `<tr><th>ناوی بابەت</th><th>مامۆستاکان</th><th></th></tr>` +
+  const prefs = {any:'هەر کاتێک', early:'سەرەتای ڕۆژ (بابەتی قورس)', late:'کۆتایی ڕۆژ'};
+  $('sTable').innerHTML = `<tr><th>ناوی بابەت</th><th>کاتی باشتر</th><th>مامۆستاکان</th><th></th></tr>` +
     CACHE.subjects.map(x=>{
       const teachers = CACHE.teachers.filter(t=>t.subject_ids.includes(Number(x.id))).map(t=>t.full_name).join('، ');
-      return `<tr><td>${esc(x.name)}</td><td class="muted">${esc(teachers)}</td>
+      const sel = Object.entries(prefs).map(([k,v])=>`<option value="${k}" ${x.time_pref===k?'selected':''}>${v}</option>`).join('');
+      return `<tr><td>${esc(x.name)}</td><td><select class="small-select" data-pref="${x.id}">${sel}</select></td><td class="muted">${esc(teachers)}</td>
       <td class="actions">
         <button class="icon-btn edit" data-act="edit" data-id="${x.id}">✎</button>
         <button class="icon-btn" data-act="del" data-id="${x.id}">🗑</button></td></tr>`;
     }).join('');
+  loadRelations();
 }
+async function loadRelations(){
+  $('relA').innerHTML = $('relB').innerHTML = opts(CACHE.subjects, s=>s.name);
+  const r = (await api('relations_list')).data;
+  const kinds = {not_same_day:'لە یەک ڕۆژدا نەبن', consecutive:'بەدوای یەکدا بن'};
+  $('relList').innerHTML = r.length ? r.map(x=>`<span class="off-chip">${esc(x.a_name)} ↔ ${esc(x.b_name)}: ${kinds[x.kind]} <b data-id="${x.id}" title="سڕینەوە">✕</b></span>`).join('')
+    : '<span class="hint">هیچ پەیوەندییەک زیاد نەکراوە.</span>';
+}
+$('btnAddRel').onclick = async ()=>{
+  await api('relation_add', {subject_a:$('relA').value, subject_b:$('relB').value, kind:$('relKind').value});
+  loadRelations(); toast('پەیوەندی زیادکرا');
+};
+$('relList').onclick = async e=>{
+  const id = e.target.closest('b[data-id]')?.dataset.id; if (!id) return;
+  await api('relation_delete', {id}); loadRelations();
+};
+$('sTable').addEventListener('change', async e=>{
+  const id = e.target.dataset.pref; if (!id) return;
+  const s = byId(CACHE.subjects, id);
+  await api('subject_update', {id, name:s.name, time_pref:e.target.value});
+  s.time_pref = e.target.value; toast('پاشەکەوت کرا');
+});
 $('btnAddSubject').onclick = async ()=>{
   await api('subject_add', {name: $('sName').value});
   $('sName').value='';
@@ -305,7 +336,7 @@ $('sName').onkeydown = e=>{ if (e.key==='Enter') $('btnAddSubject').click(); };
 $('sTable').onclick = async e=>{
   const b = e.target.closest('[data-act]'); if (!b) return;
   const s = byId(CACHE.subjects, b.dataset.id);
-  if (b.dataset.act==='edit') renameForm('بابەت', s, 'subject_update', loadSubjects);
+  if (b.dataset.act==='edit') renameForm('بابەت', s, 'subject_update', loadSubjects, `<input type="hidden" id="fPref" value="${esc(s.time_pref)}">`);
   if (b.dataset.act==='del'){
     if(!await askConfirm(`بابەتی «${s.name}» بسڕدرێتەوە؟ (هەموو وانەکانی ئەم بابەتە لە خشتەدا دەسڕێنەوە)`)) return;
     await api('subject_delete', {id:s.id}); await loadSubjects(); loadTeachers(); updateUndo();
@@ -316,15 +347,18 @@ function renameForm(what, item, action, reload, extra=''){
     async ()=>{
       const body = { id:item.id, name: $('fName').value };
       if ($('fGrade')) body.grade_level = parseInt($('fGrade').value)||0;
+      if ($('fPref')) body.time_pref = $('fPref').value;
       await api(action, body); await reload();
     });
 }
 
 // ============ پۆلەکان و پرۆگرامی خوێندن ============
 let currClass = null;
+let CURR_ALL = [];
 async function loadClasses(){
   CACHE.classes = (await api('classes_list')).data;
   const curr = (await api('curriculum_list')).data;
+  CURR_ALL = curr;
   const need = {};
   curr.forEach(c=> need[c.class_id] = (need[c.class_id]||0) + Number(c.periods_per_week));
   const cap = CFG.days.length * CFG.periods;
@@ -370,7 +404,7 @@ function renderCurriculum(rows){
   const total = rows.reduce((s,r)=>s+Number(r.periods_per_week),0);
   $('currTable').innerHTML = `<tr><th>بابەت</th><th>گرووپ</th><th>مامۆستا</th><th>ژوور</th><th>هەفتانە</th><th>دووانی</th><th>دانراوە</th><th></th></tr>` +
     rows.map(r=>`<tr>
-      <td>${esc(r.subject_name)}</td><td>${esc(r.group_name)}</td>
+      <td>${esc(r.subject_name)}${r.joint_group?`<div class="joint-tag" title="وانەی هاوبەش">🔗 ${esc(r.joint_classes.join('، '))}</div>`:''}</td><td>${esc(r.group_name)}</td>
       <td>${r.teacher_name ? esc(r.teacher_name) : '<span class="badge over">نییە</span>'}</td>
       <td>${esc(r.room_name||'')}</td><td>${r.periods_per_week}</td><td>${r.double_count||''}</td>
       <td><span class="badge ${r.placed==r.periods_per_week?'full':(r.placed>r.periods_per_week?'over':'under')}">${r.placed}/${r.periods_per_week}</span></td>
@@ -407,7 +441,7 @@ function teacherOptions(subjectId, selected){
     (q.length ? `<optgroup label="مامۆستایانی ئەم بابەتە">${o(q)}</optgroup><optgroup label="مامۆستایانی تر">${o(rest)}</optgroup>` : o(rest));
 }
 function curriculumForm(r){
-  r = r || { subject_id: CACHE.subjects[0]?.id, teacher_id:'', room_id:'', group_name:'', periods_per_week:2, double_count:0 };
+  r = r || { subject_id: CACHE.subjects[0]?.id, teacher_id:'', room_id:'', group_name:'', periods_per_week:2, double_count:0, joint_group:'' };
   openForm(r.id ? 'دەستکاریکردنی بابەتی پرۆگرام' : `بابەت بۆ پۆلی «${currClass.name}»`, `
     <label>بابەت<select id="fSubj">${opts(CACHE.subjects, s=>s.name, r.subject_id)}</select></label>
     <label>مامۆستا<select id="fTeacher">${teacherOptions(r.subject_id, r.teacher_id)}</select></label>
@@ -419,11 +453,15 @@ function curriculumForm(r){
       <label>ژوور (ئارەزوومەندانە)<select id="fRoom">${opts(CACHE.rooms, x=>x.name, r.room_id, '— بێ ژوور —')}</select></label>
       <label>گرووپ (ئارەزوومەندانە)<input id="fGroup" value="${esc(r.group_name)}" placeholder="بۆ نموونە: کچان"></label>
     </div>
-    <p class="hint">گرووپ: ئەگەر پۆلەکە دابەش دەبێت (بۆ نموونە کوڕان/کچان)، دوو گرووپی جیاواز دەتوانن لە یەک کاتدا وانەیان هەبێت.</p>`,
+    <p class="hint">گرووپ: ئەگەر پۆلەکە دابەش دەبێت (بۆ نموونە کوڕان/کچان)، دوو گرووپی جیاواز دەتوانن لە یەک کاتدا وانەیان هەبێت.</p>
+    <label>وانەی هاوبەش (ئارەزوومەندانە)<input id="fJoint" value="${esc(r.joint_group)}" placeholder="بۆ نموونە: ئایین-٧" list="jointList"></label>
+    <datalist id="jointList">${[...new Set(CURR_ALL.filter(x=>x.joint_group).map(x=>x.joint_group))].map(j=>`<option value="${esc(j)}">`).join('')}</datalist>
+    <p class="hint">وانەی هاوبەش: ئەگەر یەک مامۆستا ئەم بابەتە بۆ چەند پۆلێک <b>پێکەوە</b> دەڵێتەوە، هەمان ناو لە پرۆگرامی هەموو ئەو پۆلانەدا بنووسە.
+    دروستکەرەکە هەموویان لە یەک کاتدا دادەنێت.</p>`,
   async ()=>{
     await api('curriculum_save', {
       id: r.id, class_id: currClass.id, subject_id: $('fSubj').value, teacher_id: $('fTeacher').value,
-      room_id: $('fRoom').value, group_name: $('fGroup').value,
+      room_id: $('fRoom').value, group_name: $('fGroup').value, joint_group: $('fJoint').value,
       periods_per_week: parseInt($('fPpw').value), double_count: parseInt($('fDbl').value)||0,
     });
     await loadClasses();
@@ -610,6 +648,7 @@ function openLesson(row, day, period){
   $('btnDeleteLesson').classList.toggle('hidden', !row);
   $('suggestBox').innerHTML = '';
   hideErr('lessonError');
+  showJoint(row?.joint_group, row?.joint_group ? [...new Set(TT_ROWS.filter(x=>x.joint_group===row.joint_group).map(x=>x.class_name))] : []);
   fillLessonSubjects(base.subject_id).then(()=>{
     if (!row && !base.teacher_id) applyPlanned(); else fillLessonTeachers(base.teacher_id);
   });
@@ -622,7 +661,7 @@ async function fillLessonSubjects(selected){
   const inCurr = LS_CURR.map(c=>{
     const s = byId(CACHE.subjects, c.subject_id);
     const left = c.periods_per_week - c.placed;
-    return `<option value="${c.subject_id}" data-group="${esc(c.group_name)}">${esc(s?.name)}${c.group_name?' ('+esc(c.group_name)+')':''} — ${left>0?left+' ماوە':'تەواوە'}</option>`;
+    return `<option value="${c.subject_id}" data-group="${esc(c.group_name)}">${c.joint_group?'🔗 ':''}${esc(s?.name)}${c.group_name?' ('+esc(c.group_name)+')':''} — ${left>0?left+' ماوە':'تەواوە'}</option>`;
   }).join('');
   const others = CACHE.subjects.filter(s=>!LS_CURR.some(c=>c.subject_id==s.id))
     .map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
@@ -644,9 +683,16 @@ function fillLessonTeachers(selected){
   $('lsTeacher').innerHTML = teacherOptions($('lsSubject').value, selected);
 }
 /** گرووپ، مامۆستا و ژووری پرۆگرامەکە بە خۆکاری پڕ دەکرێنەوە. */
+let LS_JOINT = '';
+function showJoint(joint, classes){
+  LS_JOINT = joint || '';
+  $('lsJointInfo').classList.toggle('hidden', !LS_JOINT);
+  if (LS_JOINT) $('lsJointInfo').textContent = `🔗 وانەی هاوبەش — بۆ هەموو ئەم پۆلانە پێکەوە دادەنرێت: ${classes.join('، ')}`;
+}
 function applyPlanned(){
   const opt = $('lsSubject').selectedOptions[0];
   const c = LS_CURR.find(x=>x.subject_id==$('lsSubject').value && x.group_name===(opt?.dataset.group ?? ''));
+  if (!editing.id) showJoint(c?.joint_group, c?.joint_classes || []);
   if (c){
     $('lsGroup').value = c.group_name;
     if (c.room_id) $('lsRoom').value = c.room_id;
@@ -661,6 +707,7 @@ function lessonBody(){
   return {
     id: editing.id, class_id: $('lsClass').value, subject_id: $('lsSubject').value,
     teacher_id: $('lsTeacher').value, room_id: $('lsRoom').value, group_name: $('lsGroup').value,
+    joint_group: editing.id ? undefined : LS_JOINT,
     day_of_week: editing.day, period_no: editing.period,
     locked: $('lsLocked').checked ? 1 : 0, double: $('lsDouble').checked,
   };
@@ -723,20 +770,31 @@ document.addEventListener('keydown', e=>{
 $('btnGenerate').onclick = ()=>{
   openForm('دروستکردنی ئۆتۆماتیکی خشتە', `
     <p>سیستەمەکە بەپێی <b>پرۆگرامی خوێندنی هەر پۆلێک</b> (لە تابی پۆلەکان) وانەکان دادەنێت و ڕێز لە
-    کاتی بەتاڵی مامۆستایان، میلاک، ژوور و گرووپەکان دەگرێت.</p>
+    کاتی بەتاڵ، میلاک، سنووری ڕۆژانە، ژوور، گرووپ و وانەی هاوبەش دەگرێت. پاشان خشتەکە <b>باشتر دەکات</b>:
+    بۆشایی مامۆستا و پۆل کەم دەکاتەوە، بابەتی قورس دەباتە سەرەتای ڕۆژ، و پەیوەندی بابەتەکان جێبەجێ دەکات.</p>
+    <label>ماوەی هەوڵدان (کاتی زیاتر = خشتەی باشتر)
+      <select id="fSecs"><option value="5">خێرا — ٥ چرکە</option><option value="15" selected>ئاسایی — ١٥ چرکە</option>
+      <option value="40">ورد — ٤٠ چرکە</option><option value="90">زۆر ورد — ٩٠ چرکە (قوتابخانەی گەورە)</option></select></label>
     <label class="check"><input type="checkbox" id="fRegen" checked>
       وانە ئۆتۆماتیکییە کۆنەکان بسڕەوە و لە سەرەتاوە دروستی بکەرەوە (وانە 🔒 قوفڵکراوەکان دەمێننەوە)</label>
     <p class="hint">ئەگەر ئەم بژاردەیە نەکرێت، تەنها وانە ماوەکان زیاد دەکرێن. هەمیشە دەتوانیت بە «↶ گەڕانەوە» بگەڕێیتەوە.</p>`,
   async ()=>{
     const regenerate = $('fRegen').checked;
+    const seconds = parseInt($('fSecs').value);
     closeModal('formModal');
-    $('ttProgress').textContent = '⏳ خشتە دروست دەکرێت... (چەند چرکەیەک)';
     $('ttProgress').classList.remove('hidden');
     $('btnGenerate').disabled = true;
+    // پیشاندانی پێشکەوتن بەپێی کات
+    const t0 = Date.now();
+    const tick = setInterval(()=>{
+      const pct = Math.min(99, Math.round((Date.now()-t0) / (seconds*10)));
+      $('ttProgress').innerHTML = `⏳ خشتە دروست دەکرێت و باشتر دەکرێت... ${pct}%<div class="pbar"><i style="width:${pct}%"></i></div>`;
+    }, 300);
     try {
-      const r = (await api('timetable_generate', {regenerate})).data;
+      const r = (await api('timetable_generate', {regenerate, seconds})).data;
       showGenerateResult(r);
     } finally {
+      clearInterval(tick);
       $('ttProgress').classList.add('hidden');
       $('btnGenerate').disabled = false;
       refreshAfterChange();
@@ -751,10 +809,21 @@ function showGenerateResult(r){
   const ok = r.placed === r.total && !r.messages.length;
   openForm(ok ? 'خشتەکە بە تەواوی دروست کرا ✓' : 'خشتەکە بە بەشێکی دروست کرا', `
     <p>${r.placed} لە ${r.total} یەکەی وانە دانران.</p>
+    ${qualityCompare(r.before, r.after)}
     ${r.messages.length ? `<ul class="issues-list">${r.messages.map(m=>`<li>${esc(m)}</li>`).join('')}</ul>
       <p class="hint">بۆ چارەسەر: کاتی بەتاڵی مامۆستاکان کەم بکەرەوە، میلاک زیاد بکە، مامۆستای تر دیاری بکە،
       یان وانە ماوەکان بە دەست دابنێ.</p>` : ''}`,
     async ()=>true, 'باشە');
+}
+
+function qualityCompare(b, a){
+  if (!a) return '';
+  if (b && !b.lessons) b = null; // خشتەکە پێشتر بەتاڵ بوو
+  const row = (label, k) => `<tr><td>${label}</td><td>${b?.[k] ?? '—'}</td><td><b>${a[k]}</b></td></tr>`;
+  return `<table class="grid compact"><tr><th>کوالێتی</th><th>پێشتر</th><th>ئێستا</th></tr>
+    ${row('بۆشایی مامۆستایان', 'teacher_gaps')}${row('بۆشایی پۆلەکان', 'class_gaps')}
+    ${row('بابەت لە کاتی نەگونجاودا', 'time_misses')}${row('پەیوەندی بابەتی جێبەجێنەکراو', 'relation_miss')}
+    ${row('کۆی خاڵی سزا (کەمتر باشترە)', 'score')}</table>`;
 }
 
 // --- پاککردنەوە ---
@@ -816,7 +885,17 @@ async function printTimetables(which){
 
 // ============ ڕاپۆرت ============
 async function loadReport(){
-  const [v, r] = await Promise.all([api('validate'), api('load_report')]);
+  const [v, r, q] = await Promise.all([api('validate'), api('load_report'), api('quality')]);
+  const Q = q.data;
+  $('qualityBox').innerHTML = `<div class="stats">
+      <div><b>${Q.teacher_gaps}</b><span>بۆشایی مامۆستایان</span></div>
+      <div><b>${Q.class_gaps}</b><span>بۆشایی پۆلەکان</span></div>
+      <div><b>${Q.time_misses}</b><span>بابەت لە کاتی نەگونجاو</span></div>
+      <div><b>${Q.relation_miss}</b><span>پەیوەندی جێبەجێنەکراو</span></div>
+      <div><b>${Q.score}</b><span>خاڵی سزا (کەمتر باشترە)</span></div></div>
+    ${Q.issues.length ? `<details><summary>${Q.issues.length} خاڵی باشترکردن</summary><ul class="issues-list">${Q.issues.slice(0,200).map(i=>`<li>${esc(i)}</li>`).join('')}</ul></details>` : ''}
+    ${Q.teachers.some(t=>t.gaps) ? `<table class="grid compact"><tr><th>مامۆستا</th><th>وانە</th><th>بۆشایی لە هەفتەدا</th></tr>
+      ${Q.teachers.filter(t=>t.gaps).map(t=>`<tr><td>${esc(t.name)}</td><td>${t.lessons}</td><td>${t.gaps}</td></tr>`).join('')}</table>` : ''}`;
   $('validateBox').innerHTML = v.data.length
     ? `<ul class="issues-list">${v.data.map(i=>`<li class="${i.level}">${i.level==='error'?'⛔':'⚠'} ${esc(i.text)}</li>`).join('')}</ul>`
     : '<p class="ok-box">✓ هیچ کێشەیەک نەدۆزرایەوە.</p>';
@@ -830,6 +909,115 @@ async function loadReport(){
         <td>${x.assigned}</td><td>${x.remaining}</td><td>${st}</td></tr>`;
     }).join('');
 }
+
+// ============ ڕێگرییەکان ============
+const WEIGHTS = [
+  ['w_teacher_gaps', 'کەمکردنەوەی بۆشایی مامۆستا'],
+  ['w_class_gaps',   'پۆل بێ بۆشایی بێت و لە بەشە وانەی ١ دەست پێبکات'],
+  ['w_subject_time', 'کاتی باشتری بابەت (قورس لە سەرەتا...)'],
+  ['w_relations',    'پەیوەندی نێوان بابەتەکان'],
+  ['w_min_per_day',  'کەمترین وانەی ڕۆژانەی مامۆستا'],
+];
+async function loadConstraints(){
+  const c = (await api('constraints_get')).data;
+  $('cMaxGaps').value = c.max_teacher_gaps;
+  $('cMaxCons').value = c.max_consecutive;
+  const lv = {0:'ناچالاک', 1:'ئاسایی', 3:'گرنگ', 6:'زۆر گرنگ'};
+  $('cWeights').innerHTML = WEIGHTS.map(([k, label])=>`<label class="inline">${label}
+    <select data-w="${k}">${Object.entries(lv).map(([v,t])=>`<option value="${v}" ${c[k]==v?'selected':''}>${t}</option>`).join('')}</select></label>`).join('');
+}
+$('btnSaveCons').onclick = async ()=>{
+  const body = { max_teacher_gaps: $('cMaxGaps').value, max_consecutive: $('cMaxCons').value };
+  document.querySelectorAll('[data-w]').forEach(x=> body[x.dataset.w] = x.value);
+  await api('constraints_save', body);
+  toast('ڕێگرییەکان پاشەکەوت کران');
+};
+
+// ============ هێنانی داتا ============
+async function uploadImport(action, file, extra={}){
+  const fd = new FormData(); fd.append('file', file);
+  Object.entries(extra).forEach(([k,v])=>fd.append(k, v));
+  return (await api(action, fd)).data;
+}
+$('ascFile').onchange = async e=>{
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  if (!await askConfirm(`هەموو داتای ئێستا (مامۆستا، پۆل، بابەت، خشتە) بە داتای «${file.name}» دەگۆڕدرێت. پێشتر پاڵپشتی دەگیرێت. بەردەوام بیت؟`)) return;
+  const r = await uploadImport('import_asc', file, $('ascCards').checked ? {with_cards:1} : {});
+  await reloadAll();
+  openForm('هێنان لە aSc تەواو بوو ✓', `<ul class="issues-list">
+    <li>${r.teachers} مامۆستا، ${r.subjects} بابەت، ${r.classes} پۆل، ${r.rooms} ژوور</li>
+    <li>${r.curriculum} بابەتی پرۆگرامی خوێندن</li><li>${r.lessons} وانەی دانراو لە خشتەدا</li></ul>
+    <p class="hint">کاتی بەتاڵی مامۆستاکان لە aSc ـەوە ناهێنرێت؛ لە تابی مامۆستایان دیاریان بکە.</p>`, async ()=>true, 'باشە');
+};
+$('csvFile').onchange = async e=>{
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  const r = await uploadImport('import_csv', file);
+  await reloadAll();
+  openForm('هێنان لە Excel تەواو بوو', `<p>${r.added} بابەتی نوێ زیادکرا، ${r.updated} نوێکرایەوە.</p>
+    ${r.errors.length ? `<ul class="issues-list">${r.errors.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : ''}`, async ()=>true, 'باشە');
+};
+$('btnPublish').onclick = ()=>{
+  openForm('بڵاوکردنەوە بۆ مۆبایل', `<p>فایلێکی بچووک (<code>timetable-mobile.html</code>) دروست دەکرێت کە خشتەی هەموو پۆل و مامۆستایانی تێدایە.</p>
+    <ul class="issues-list"><li>بە WhatsApp، Telegram یان Viber بینێرە بۆ مامۆستایان و قوتابیان</li>
+    <li>لە هەر مۆبایل و کۆمپیوتەرێکدا بەبێ ئینتەرنێت دەکرێتەوە</li>
+    <li>هەر کەسێک پۆل یان ناوی خۆی هەڵدەبژێرێت</li></ul>`,
+  async ()=>{ location.href = 'api/index.php?action=publish_html'; }, '⬇ دروستکردن');
+};
+
+// ============ مامۆستای جێگرەوە ============
+function todayStr(){ const d = new Date(); return new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,10); }
+function initSubs(){
+  if (!$('subDate').value) $('subDate').value = todayStr();
+  const prev = $('subTeacher').value;
+  $('subTeacher').innerHTML = opts(CACHE.teachers, t=>t.full_name, prev);
+  loadSubList();
+}
+$('subDate').onchange = ()=>{ $('subBox').innerHTML=''; loadSubList(); };
+let SUB_DAY = null;
+$('btnSubLoad').onclick = async ()=>{
+  const date = $('subDate').value, tid = $('subTeacher').value;
+  try { SUB_DAY = (await api('subs_day', null, `&date=${date}&teacher_id=${tid}`)).data; }
+  catch (e){ $('subBox').innerHTML = `<p class="error">${esc(e.message)}</p>`; return; }
+  if (!SUB_DAY.lessons.length){ $('subBox').innerHTML = `<p class="ok-box">ئەم مامۆستایە ڕۆژی ${esc(SUB_DAY.day_name)} هیچ وانەیەکی نییە.</p>`; return; }
+  $('subBox').innerHTML = `<h3>${esc(SUB_DAY.day_name)} — ${esc($('subTeacher').selectedOptions[0].text)}</h3>
+    <table class="grid"><tr><th>بەشە وانە</th><th>پۆل</th><th>بابەت</th><th>مامۆستای جێگرەوە</th><th></th></tr>` +
+    SUB_DAY.lessons.map((l,i)=>`<tr><td>${l.period_no}</td><td>${esc(l.class_name)}${l.group_name?' ('+esc(l.group_name)+')':''}</td><td>${esc(l.subject_name)}</td>
+      <td><select data-sub="${i}"><option value="">— هیچ (پشوو) —</option>${l.candidates.map(c=>
+        `<option value="${c.id}" ${l.substitution?.substitute_id==c.id?'selected':''}>${c.same_subject?'★ ':''}${esc(c.name)} (ئەمڕۆ ${c.today} وانە)</option>`).join('')}</select></td>
+      <td>${l.substitution ? '<span class="badge full">پاشەکەوتکراو</span>' : ''}</td></tr>`).join('') + `</table>
+    <p class="hint">★ = هەمان بابەت دەڵێتەوە. تەنها ئەو مامۆستایانە پیشان دەدرێن کە لەو کاتەدا ئازادن.</p>`;
+};
+$('subBox').addEventListener('change', async e=>{
+  const i = e.target.dataset.sub; if (i===undefined) return;
+  const l = SUB_DAY.lessons[i];
+  await api('subs_save', { date: $('subDate').value, absent_id: $('subTeacher').value, period_no: l.period_no,
+    class_ids: l.class_ids, subject_id: l.subject_id, substitute_id: e.target.value });
+  toast('پاشەکەوت کرا');
+  $('btnSubLoad').click(); loadSubList();
+});
+let SUB_LIST = [];
+async function loadSubList(){
+  SUB_LIST = (await api('subs_list', null, '&date='+$('subDate').value)).data;
+  $('subList').innerHTML = `<tr><th>بەشە وانە</th><th>پۆل</th><th>بابەت</th><th>مامۆستای ئامادەنەبوو</th><th>جێگرەوە</th><th></th></tr>` +
+    (SUB_LIST.length ? SUB_LIST.map(x=>`<tr><td>${x.period_no}</td><td>${esc(x.class_name)}</td><td>${esc(x.subject_name)}</td>
+      <td>${esc(x.absent_name)}</td><td>${x.substitute_name ? esc(x.substitute_name) : '<span class="hint">پشوو</span>'}</td>
+      <td><button class="icon-btn" data-del="${x.id}">🗑</button></td></tr>`).join('')
+    : '<tr><td colspan="6" class="hint">هیچ جێگرەوەیەک بۆ ئەم ڕۆژە دیاری نەکراوە.</td></tr>');
+}
+$('subList').onclick = async e=>{
+  const id = e.target.closest('[data-del]')?.dataset.del; if (!id) return;
+  await api('subs_delete', {id}); loadSubList();
+};
+$('btnSubPrint').onclick = ()=>{
+  $('printArea').innerHTML = `<div class="print-page"><div class="print-head"><span>${esc(CFG.school_name)}</span>
+    <b>مامۆستایانی جێگرەوە — ${esc($('subDate').value)}</b></div>
+    <table class="tt-table"><tr><th>بەشە وانە</th><th>پۆل</th><th>بابەت</th><th>مامۆستای ئامادەنەبوو</th><th>جێگرەوە</th><th>واژوو</th></tr>
+    ${SUB_LIST.map(x=>`<tr><td>${x.period_no}</td><td>${esc(x.class_name)}</td><td>${esc(x.subject_name)}</td><td>${esc(x.absent_name)}</td>
+      <td>${esc(x.substitute_name||'پشوو')}</td><td></td></tr>`).join('')}</table></div>`;
+  setTimeout(()=>window.print(), 50);
+};
 
 // --- دەستپێک ---
 async function reloadAll(){
